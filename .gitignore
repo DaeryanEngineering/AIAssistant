@@ -1,0 +1,25 @@
+# Audio assets (copyrighted)
+audio/
+!audio/README.txt
+
+# Video assets (copyrighted)
+video/
+!video/README.txt
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+.env/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+#VS Code
+.vscode/
+
+# Driver map
+telemetry/driver_map.py

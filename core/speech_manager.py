@@ -1,0 +1,1 @@
+# core/speech_manager.py
