@@ -14,5 +14,8 @@ class BaseMode:
     def on_exit(self):
         pass
 
-    def update(self):
+    def update(self, input_manager, speech_manager, response_brain, av_manager, tts_engine):
+        """
+        Shared manager Stub
+        """
         pass
