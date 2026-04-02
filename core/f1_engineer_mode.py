@@ -5,7 +5,6 @@ from .f1_mode import F1Mode
 class F1EngineerMode(F1Mode):
     """
     Saul's race engineer mode.
-    Phase 1: placeholder.
     """
 
     def on_enter(self):
