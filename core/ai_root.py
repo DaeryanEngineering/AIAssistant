@@ -8,6 +8,7 @@ from .tts_engine import TTSEngine
 from .tone_engine import ToneEngine
 from .mood_engine import MoodEngine
 from .response_brain import ResponseBrain
+from .intent_parser import IntentParser
 
 class AIRoot:
     """
@@ -27,6 +28,7 @@ class AIRoot:
         self.tone_engine = ToneEngine()
         self.mood_engine = MoodEngine()
         self.response_brain = ResponseBrain(self.tone_engine, self.mood_engine)
+        self.intent_parser = IntentParser()
 
     def set_mode(self, mode_class):
         if self.current_mode:
@@ -55,6 +57,7 @@ class AIRoot:
             self.current_mode.update(
                 self.input_manager,
                 self.speech_manager,
+                self.intent_parser,
                 self.response_brain,
                 self.av_manager,
                 self.tts_engine,

@@ -1,10 +1,20 @@
 # core/audio_video_manager.py
 
+import threading
+import queue
+import sounddevice as sd
+import numpy as np
+
 from .assets import AssetMap
+
 
 class AudioVideoManager:
     """
-    AV Manager
+    Real Audio + Video Manager
+    - Plays radio beeps
+    - Plays XTTS audio
+    - Manages talking/idle animations
+    - Threaded audio queue
     """
 
     def __init__(self):
@@ -12,9 +22,21 @@ class AudioVideoManager:
         self._visible = True
         self._current_animation = None
 
-    # -------------------------
-    # Visibility
-    # -------------------------
+        # -------------------------
+        # Audio queue + thread
+        # -------------------------
+        self._audio_queue = queue.Queue()
+        self._stop_flag = threading.Event()
+
+        self._audio_thread = threading.Thread(
+            target=self._audio_worker,
+            daemon=True
+        )
+        self._audio_thread.start()
+
+    # =========================================================
+    # VISIBILITY
+    # =========================================================
 
     def set_visible(self, visible: bool) -> None:
         self._visible = visible
@@ -23,14 +45,11 @@ class AudioVideoManager:
     def is_visible(self) -> bool:
         return self._visible
 
-    # -------------------------
-    # Animation Control
-    # -------------------------
+    # =========================================================
+    # ANIMATION CONTROL
+    # =========================================================
 
     def play_animation(self, name: str, *, loop: bool = True) -> None:
-        """
-        Video Player
-        """
         path = AssetMap.get_animation(name)
         self._current_animation = name
 
@@ -46,21 +65,81 @@ class AudioVideoManager:
             print(f"[AV] Stop animation: {self._current_animation} -> {resolved}")
         self._current_animation = None
 
-    # -------------------------
-    # State Helper
-    # -------------------------
+    # =========================================================
+    # STATE HELPER
+    # =========================================================
 
     def set_state(self, state: str) -> None:
         self._state = state
         print(f"[AV] State -> {state}")
 
-    # -------------------------
-    # Audio Playback
-    # -------------------------
+    # =========================================================
+    # AUDIO PLAYBACK (RADIO BEEP)
+    # =========================================================
 
     def play_audio(self, name: str) -> None:
         """
-        Audio Player
+        Plays a short audio asset (radio beep, etc.)
         """
         path = AssetMap.get_audio(name)
         print(f"[AV] Play audio: {name} -> {path}")
+
+        # Load WAV file
+        import soundfile as sf
+        audio, sr = sf.read(path, dtype="float32")
+
+        # Queue for playback
+        self._audio_queue.put((audio, sr, False))  # False = no animation change
+
+    # =========================================================
+    # TTS AUDIO PLAYBACK
+    # =========================================================
+
+    def play_tts_audio(self, audio: np.ndarray, sr: int):
+        """
+        Called by TTSEngine after XTTS synthesis.
+        """
+        # Trigger talking animation
+        self.on_talk_start()
+
+        # Queue audio for playback
+        self._audio_queue.put((audio, sr, True))  # True = return to idle after
+
+    # =========================================================
+    # AUDIO THREAD WORKER
+    # =========================================================
+
+    def _audio_worker(self):
+        while not self._stop_flag.is_set():
+            item = self._audio_queue.get()
+            if item is None:
+                break
+
+            audio, sr, return_to_idle = item
+
+            sd.play(audio, sr)
+            sd.wait()
+
+            if return_to_idle:
+                self.on_talk_end()
+
+            self._audio_queue.task_done()
+
+    # =========================================================
+    # TALKING / IDLE ANIMATION HOOKS
+    # =========================================================
+
+    def on_talk_start(self):
+        self.play_animation("talking", loop=True)
+
+    def on_talk_end(self):
+        self.play_animation("idle", loop=True)
+
+    # =========================================================
+    # SHUTDOWN
+    # =========================================================
+
+    def shutdown(self):
+        self._stop_flag.set()
+        self._audio_queue.put(None)
+        self._audio_thread.join()

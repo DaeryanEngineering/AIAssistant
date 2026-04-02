@@ -12,7 +12,7 @@ class F1EngineerMode(F1Mode):
     def on_enter(self):
         print("[F1EngineerMode] Entered (on-track, radio-only)")
 
-    def update(self, input_manager, speech_manager, response_brain, av_manager, tts_engine):
+    def update(self, input_manager, speech_manager, intent_parser, response_brain, av_manager, tts_engine):
         av_manager.set_visible(False)
 
         if input_manager.is_pressed():
@@ -22,7 +22,8 @@ class F1EngineerMode(F1Mode):
             av_manager.set_state("thinking")
 
             user_text = speech_manager.listen_ptt()
-            response = response_brain.generate(user_text, "F1EngineerMode", self.context)
+            command = intent_parser.parse(user_text, self.__class__.__name__)
+            response = response_brain.generate(user_text, self.__class__.__name__, self.context)
 
             av_manager.set_state("talking")
 

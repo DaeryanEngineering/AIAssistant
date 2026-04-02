@@ -11,7 +11,7 @@ class AIMode(BaseMode):
     def on_enter(self):
         print("[AIMode] Entered")
 
-    def update(self, input_manager, speech_manager, response_brain, av_manager, tts_engine):
+    def update(self, input_manager, speech_manager, intent_parser, response_brain, av_manager, tts_engine):
         av_manager.set_visible(True)
 
         if input_manager.is_pressed():
@@ -23,7 +23,8 @@ class AIMode(BaseMode):
             av_manager.play_animation("aimode_think", loop=False)
 
             user_text = speech_manager.listen_ptt()
-            response = response_brain.generate(user_text, "AIMode", self.context)
+            command = intent_parser.parse(user_text, self.__class__.__name__)
+            response = response_brain.generate(user_text, self.__class__.__name__, self.context)
 
             av_manager.set_state("talking")
             av_manager.play_animation("aimode_talk", loop=False)
