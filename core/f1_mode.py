@@ -6,34 +6,75 @@ from .assets import AssetMap
 class F1Mode(BaseMode):
     """
     Garage / pre-session Saul.
+    Text-driven. No PTT behavior.
+    Supports long-form, chunked speech and looping thinking animations.
     """
+
+    def __init__(self, context):
+        super().__init__(context)
+        self.waiting_for_user = False  # NEW: controls looping thinking animation
 
     def on_enter(self):
         print("[F1Mode] Entered (garage)")
+        self.waiting_for_user = True  # She waits for typed input in the garage
 
-    def update(self, input_manager, speech_manager, intent_parser, response_brain, av_manager, tts_engine):
+    def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine):
+        # F1Mode is text-driven. PTT does nothing here.
         av_manager.set_visible(True)
 
-        if input_manager.is_pressed():
-            av_manager.set_state("listening")
-            av_manager.play_animation("f1mode_listen", loop=True)
+        # If she's waiting for user input and no text is submitted, loop thinking animation
+        if self.waiting_for_user:
+            user_text = input_manager.get_text()
+            if not user_text:
+                av_manager.set_state("thinking")
+                av_manager.play_animation("f1mode_think", loop=True)
+                return
+        else:
+            # Not waiting for user, but check for text anyway
+            user_text = input_manager.get_text()
+            if not user_text:
+                return
 
-        if input_manager.is_released():
-            av_manager.set_state("thinking")
-            av_manager.play_animation("f1mode_think", loop=False)
+        # At this point, we have user text
+        self.waiting_for_user = False  # She is now processing input
 
-            user_text = speech_manager.listen_ptt()
-            command = intent_parser.parse(user_text, self.__class__.__name__)
-            response = response_brain.generate(user_text, self.__class__.__name__, self.context)
+        # Quick-thinking animation (non-looping)
+        av_manager.set_state("thinking")
+        av_manager.play_animation("f1mode_think", loop=False)
 
+        # Generate response (may be long)
+        command = intent_parser.parse(user_text, self.__class__.__name__)
+        full_response = response_brain.generate(
+            user_text,
+            self.__class__.__name__,
+            self.context
+        )
+
+        # Split into chunks (paragraphs)
+        chunks = [c.strip() for c in full_response.split("\n\n") if c.strip()]
+
+        # Speak each chunk sequentially
+        for i, chunk in enumerate(chunks):
             av_manager.set_state("talking")
-            av_manager.play_animation("f1mode_talk", loop=False)
+            av_manager.play_animation("f1mode_talk", loop=True)
 
             tts_engine.speak(
-                response,
+                chunk,
                 radio=False,
-                voice_profile="saul_garage"
+                play_beep=False,
+                voice_profile="saul_main"
             )
 
+            # After each chunk, return to idle (Option A)
             av_manager.set_state("idle")
             av_manager.play_animation("f1mode_idle", loop=True)
+
+            # If there are more chunks coming, loop thinking while preparing next chunk
+            if i < len(chunks) - 1:
+                av_manager.set_state("thinking")
+                av_manager.play_animation("f1mode_think", loop=True)
+
+        # After all chunks, she waits for your next input
+        self.waiting_for_user = True
+        av_manager.set_state("thinking")
+        av_manager.play_animation("f1mode_think", loop=True)

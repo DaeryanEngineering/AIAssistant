@@ -6,20 +6,19 @@ from core.ai_root import AIRoot
 from core.ai_mode import AIMode
 from core.f1_mode import F1Mode
 from core.f1_engineer_mode import F1EngineerMode
-
-def simulate_ptt_cycle(saul: AIRoot, mode_name: str):
-    print(f"\n--- Simulating PTT cycle in {mode_name} ---")
-    # Press PTT
-    saul.input_manager.set_ptt_state(True)
-    saul.update()
-    # Release PTT
-    saul.input_manager.set_ptt_state(False)
-    saul.update()
+from core.mode_manager import ModeManager
+from core.pause_manager import PauseManager
 
 def main():
     print("Saul is starting...")
 
     saul = AIRoot()
+
+    saul.pause_manager = PauseManager(
+        telemetry_state=telemetry_state,
+        input_manager=saul.input_manager,
+        text_box_ui=saul.text_box
+    )
 
     # --- Event System ---
     telemetry_state = TelemetryState()
@@ -29,30 +28,40 @@ def main():
     )
     event_router = EventRouter(engineer_brain)
 
-    # Register router as listener
     telemetry_state.register_listener(event_router)
 
-    # Give Saul access to telemetry + router if needed
     saul.telemetry_state = telemetry_state
     saul.event_router = event_router
 
+    # --- Mode Manager (NEW) ---
+    def on_mode_change(new_mode):
+        # Saul switches modes automatically
+        if new_mode == new_mode.AI:
+            saul.set_mode(AIMode)
+        elif new_mode == new_mode.F1:
+            saul.set_mode(F1Mode)
+        elif new_mode == new_mode.ENGINEER:
+            saul.set_mode(F1EngineerMode)
+        elif new_mode == new_mode.PAUSED:
+            pass
 
-    # AIMode: assistant away from F1
-    saul.set_mode(AIMode)
-    simulate_ptt_cycle(saul, "AIMode")
+    mode_manager = ModeManager(
+        telemetry_state=telemetry_state,
+        on_mode_change=on_mode_change
+    )
 
-    # F1Mode: garage engineer
-    saul.set_mode(F1Mode)
-    simulate_ptt_cycle(saul, "F1Mode")
+    # --- Main Loop ---
+    while True:
+        # Update telemetry
+        packet = telemetry_state.get_latest_packet()
+        if packet:
+            telemetry_state.update_from_packet(packet)
 
-    # F1EngineerMode: on-track radio engineer
-    saul.set_mode(F1EngineerMode)
-    simulate_ptt_cycle(saul, "F1EngineerMode")
+        # Update mode manager (auto-switching)
+        mode_manager.update()
 
-    # packet = telemetry_manager.get_latest()
-    # if packet:
-    #     telemetry_state.update_from_packet(packet)
-    # saul.update()
-    
+        # Update Saul
+        saul.update()
+
 if __name__ == "__main__":
     main()

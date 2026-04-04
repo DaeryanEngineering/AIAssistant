@@ -4,6 +4,7 @@ import threading
 import queue
 import sounddevice as sd
 import numpy as np
+from .video_player import VLCVideoPlayer
 
 from .assets import AssetMap
 
@@ -21,6 +22,7 @@ class AudioVideoManager:
         self._state = "idle"
         self._visible = True
         self._current_animation = None
+        self._video = VLCVideoPlayer()
 
         # -------------------------
         # Audio queue + thread
@@ -41,6 +43,7 @@ class AudioVideoManager:
     def set_visible(self, visible: bool) -> None:
         self._visible = visible
         print(f"[AV] Visible -> {visible}")
+        self._video.set_visible(visible)
 
     def is_visible(self) -> bool:
         return self._visible
@@ -56,6 +59,7 @@ class AudioVideoManager:
         loop_str = " (loop)" if loop else ""
         if self._visible:
             print(f"[AV] Play animation: {name}{loop_str} -> {path}")
+            self._video.play(path, loop=loop)
         else:
             print(f"[AV] (hidden) animation requested: {name}{loop_str} -> {path}")
 
@@ -63,7 +67,9 @@ class AudioVideoManager:
         if self._current_animation:
             resolved = AssetMap.get_animation(self._current_animation)
             print(f"[AV] Stop animation: {self._current_animation} -> {resolved}")
+
         self._current_animation = None
+        self._video.stop()
 
     # =========================================================
     # STATE HELPER
@@ -82,7 +88,6 @@ class AudioVideoManager:
         Plays a short audio asset (radio beep, etc.)
         """
         path = AssetMap.get_audio(name)
-        print(f"[AV] Play audio: {name} -> {path}")
 
         # Load WAV file
         import soundfile as sf
@@ -130,10 +135,10 @@ class AudioVideoManager:
     # =========================================================
 
     def on_talk_start(self):
-        self.play_animation("talking", loop=True)
+        self.play_animation("SaulTalk.mp4", loop=True)
 
     def on_talk_end(self):
-        self.play_animation("idle", loop=True)
+        self.play_animation("SaulIdle.mp4", loop=True)
 
     # =========================================================
     # SHUTDOWN
@@ -143,3 +148,4 @@ class AudioVideoManager:
         self._stop_flag.set()
         self._audio_queue.put(None)
         self._audio_thread.join()
+        self._video.shutdown()

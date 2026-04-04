@@ -2,13 +2,15 @@
 
 from .context import Context
 from .input_manager import InputManager
-from .speech_manager import SpeechManager
 from .audio_video_manager import AudioVideoManager
 from .tts_engine import TTSEngine
 from .tone_engine import ToneEngine
 from .mood_engine import MoodEngine
 from .response_brain import ResponseBrain
 from .intent_parser import IntentParser
+from core.pause_manager import PauseManager
+from ui.text_box_ui import TextBoxUI
+
 
 class AIRoot:
     """
@@ -24,11 +26,24 @@ class AIRoot:
         self.input_manager = InputManager()
         self.av_manager = AudioVideoManager()
         self.tts_engine = TTSEngine(self.av_manager)
-        self.speech_manager = SpeechManager()
         self.tone_engine = ToneEngine()
         self.mood_engine = MoodEngine()
         self.response_brain = ResponseBrain(self.tone_engine, self.mood_engine)
         self.intent_parser = IntentParser()
+
+        # ---------------------------------------------------------
+        # Text Box UI (Tkinter)
+        # ---------------------------------------------------------
+        self.text_box = TextBoxUI(
+            on_submit_callback=self.input_manager.submit_text
+        )
+        self.text_box.start()
+
+        # ---------------------------------------------------------
+        # Pause Manager
+        # ---------------------------------------------------------
+        self.pause_manager = None
+
 
     def set_mode(self, mode_class):
         if self.current_mode:
@@ -53,10 +68,20 @@ class AIRoot:
     def update(self):
         self.context.update()
 
+        # ---------------------------------------------------------
+        # Pause Manager update BEFORE mode update
+        # ---------------------------------------------------------
+        if self.pause_manager:
+            self.pause_manager.update(
+                current_mode=self.current_mode.__class__.__name__
+            )
+
+        # ---------------------------------------------------------
+        # Mode update
+        # ---------------------------------------------------------
         if self.current_mode:
             self.current_mode.update(
                 self.input_manager,
-                self.speech_manager,
                 self.intent_parser,
                 self.response_brain,
                 self.av_manager,
