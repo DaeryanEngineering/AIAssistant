@@ -43,6 +43,12 @@ class PauseManager:
 
         paused_now = self._detect_pause()
 
+        if paused_now:
+            objective_manager.freeze()
+        else:
+            objective_manager.resume()
+
+
         # -------------------------
         # ENTERING PAUSE
         # -------------------------
