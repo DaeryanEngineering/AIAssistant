@@ -18,7 +18,7 @@ class F1Mode(BaseMode):
         print("[F1Mode] Entered (garage)")
         self.waiting_for_user = True  # She waits for typed input in the garage
 
-    def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine):
+    def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine, objective_manager=None):
         # F1Mode is text-driven. PTT does nothing here.
         av_manager.set_visible(True)
 

@@ -13,7 +13,7 @@ class AudioVideoManager:
     """
     Real Audio + Video Manager
     - Plays radio beeps
-    - Plays XTTS audio
+    - Plays XTTS audio (from memory, saves WAV to disk)
     - Manages talking/idle animations
     - Threaded audio queue
     """
@@ -80,12 +80,12 @@ class AudioVideoManager:
         print(f"[AV] State -> {state}")
 
     # =========================================================
-    # AUDIO PLAYBACK (RADIO BEEP)
+    # AUDIO PLAYBACK (RADIO BEEP / WAV FILE)
     # =========================================================
 
     def play_audio(self, name: str) -> None:
         """
-        Plays a short audio asset (radio beep, etc.)
+        Plays a short audio asset (radio beep, etc.) by name.
         """
         path = AssetMap.get_audio(name)
 
@@ -96,6 +96,15 @@ class AudioVideoManager:
         # Queue for playback
         self._audio_queue.put((audio, sr, False))  # False = no animation change
 
+    def play_wav_file(self, path: str, return_to_idle: bool = False) -> None:
+        """
+        Plays a WAV file from disk.
+        """
+        import soundfile as sf
+        audio, sr = sf.read(path, dtype="float32")
+
+        self._audio_queue.put((audio, sr, return_to_idle))
+
     # =========================================================
     # TTS AUDIO PLAYBACK
     # =========================================================
@@ -103,11 +112,12 @@ class AudioVideoManager:
     def play_tts_audio(self, audio: np.ndarray, sr: int):
         """
         Called by TTSEngine after XTTS synthesis.
+        Plays audio from memory (already has the numpy array).
         """
         # Trigger talking animation
         self.on_talk_start()
 
-        # Queue audio for playback
+        # Queue audio for playback (from memory, not from file)
         self._audio_queue.put((audio, sr, True))  # True = return to idle after
 
     # =========================================================

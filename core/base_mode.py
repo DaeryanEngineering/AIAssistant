@@ -14,8 +14,9 @@ class BaseMode:
     def on_exit(self):
         pass
 
-    def update(self, input_manager, speech_manager, response_brain, av_manager, tts_engine):
+    def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine, objective_manager=None):
         """
-        Shared manager Stub
+        Called every frame by AIRoot.
+        Subclasses override this with mode-specific behavior.
         """
         pass

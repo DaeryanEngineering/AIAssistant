@@ -2,25 +2,76 @@
 
 from .f1_mode import F1Mode
 
+
 class F1EngineerMode(F1Mode):
     """
     Saul's race engineer mode.
     Hidden visually, radio-only.
-    PTT = confirm button.
-    Supports chunked long-form radio speech.
+    Reacts to telemetry events and processes objectives from text input.
     """
 
     def __init__(self, context):
         super().__init__(context)
-        self.waiting_for_user = False  # Not used for text, but for radio pacing
+        self.waiting_for_user = False
 
     def on_enter(self):
         print("[F1EngineerMode] Entered (on-track, radio-only)")
         self.waiting_for_user = False
 
-    def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine):
-        # Engineer mode is radio-only
+    def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine, objective_manager=None):
+        # Engineer mode is radio-only, hidden
         av_manager.set_visible(False)
+
+        # --- OBJECTIVE / CHAMPIONSHIP HANDLING (from pause text box) ---
+        if input_manager.has_text():
+            text = input_manager.consume_text()
+            intent = intent_parser.parse(text, "F1EngineerMode")
+
+            if objective_manager:
+                # Championship commands
+                if intent.intent == "f2_championship":
+                    objective_manager.record_f2_championship()
+                    return
+
+                if intent.intent == "f1_championship":
+                    objective_manager.record_f1_championship()
+                    return
+
+                if intent.intent == "reset_streak":
+                    objective_manager.reset_consecutive_titles()
+                    return
+
+                if intent.intent == "set_year":
+                    if objective_manager.career:
+                        objective_manager.career.set_career_year(intent.parameters.get("year", 1))
+                    return
+
+                if intent.intent == "set_series":
+                    if objective_manager.career:
+                        objective_manager.career.set_series(intent.parameters.get("series", "F1"))
+                    return
+
+                # Objective commands
+                if intent.intent == "objective_start":
+                    objective_manager.start_objective(
+                        intent.parameters.get("obj_type"),
+                        intent.parameters.get("description"),
+                        intent.parameters.get("target")
+                    )
+                    return
+
+                if intent.intent == "objective_pass":
+                    objective_manager.manual_pass()
+                    return
+
+                if intent.intent == "objective_fail":
+                    objective_manager.manual_fail()
+                    return
+
+                if intent.intent == "objective_cancel":
+                    objective_manager.manual_cancel()
+                    return
+
 
         # --- CONFIRMATION HANDLING ---
         if self.context.awaiting_confirmation:

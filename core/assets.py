@@ -37,7 +37,7 @@ class AssetMap:
         # Profile Reference
         "saul_main":   "assets/voices/saul.wav",
 
-        # Output file for XTTS synthesis
+        # Output file for XTTS synthesis (saved every utterance)
         "saul_output": "assets/voices/saul_output.wav",
     }
 

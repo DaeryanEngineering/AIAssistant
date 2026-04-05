@@ -8,7 +8,7 @@ from udp.packet_definitions import (
     PacketLapData,
     PacketEventData,
     PacketParticipantsData,
-    PacketCarSetupsData,
+    PacketCarSetupData,
     PacketCarTelemetryData,
     PacketCarStatusData,
     PacketFinalClassificationData,
@@ -17,6 +17,8 @@ from udp.packet_definitions import (
     PacketSessionHistoryData,
     PacketTyreSetsData,
     PacketMotionExData,
+    PacketTimeTrialData,
+    PacketLapPositionsData,
 )
 
 
@@ -40,7 +42,7 @@ class TelemetryState:
         self.lap_data: Optional[PacketLapData] = None
         self.event: Optional[PacketEventData] = None
         self.participants: Optional[PacketParticipantsData] = None
-        self.car_setups: Optional[PacketCarSetupsData] = None
+        self.car_setups: Optional[PacketCarSetupData] = None
         self.car_telemetry: Optional[PacketCarTelemetryData] = None
         self.car_status: Optional[PacketCarStatusData] = None
         self.final_classification: Optional[PacketFinalClassificationData] = None
@@ -49,12 +51,17 @@ class TelemetryState:
         self.session_history: Optional[PacketSessionHistoryData] = None
         self.tyre_sets: Optional[PacketTyreSetsData] = None
         self.motion_ex: Optional[PacketMotionExData] = None
+        self.time_trial: Optional[PacketTimeTrialData] = None
+        self.lap_positions: Optional[PacketLapPositionsData] = None
 
         # Player index (updated when session/participants packets arrive)
         self.player_index: int = 0
 
         # Lap tracking for LAP_START event
         self._last_lap = None
+
+        # Latest raw packet (for polling)
+        self._latest_packet = None
 
 
     # ------------------------------------------------------------
@@ -75,6 +82,7 @@ class TelemetryState:
         """
         Called by telemetry_manager / udp_listener with decoded packet(s).
         """
+        self._latest_packet = packet
 
         # Store packet by type
         if isinstance(packet, PacketMotionData):
@@ -82,7 +90,7 @@ class TelemetryState:
 
         elif isinstance(packet, PacketSessionData):
             self.session = packet
-            # TODO: update player index if session packet contains it
+            self.player_index = packet.header.m_playerCarIndex
 
         elif isinstance(packet, PacketLapData):
             self._handle_lap_data(packet)
@@ -120,6 +128,18 @@ class TelemetryState:
         elif isinstance(packet, PacketMotionExData):
             self.motion_ex = packet
 
+        elif isinstance(packet, PacketTimeTrialData):
+            self.time_trial = packet
+
+        elif isinstance(packet, PacketLapPositionsData):
+            self.lap_positions = packet
+
+
+    def get_latest_packet(self):
+        pkt = self._latest_packet
+        self._latest_packet = None
+        return pkt
+
 
     # ------------------------------------------------------------
     # Lap handling + LAP_START event
@@ -127,9 +147,9 @@ class TelemetryState:
     def _handle_lap_data(self, packet: PacketLapData):
         self.lap_data = packet
 
-        # Extract player lap number (placeholder until we fill packet fields)
         try:
-            current_lap = packet.lap_data[self.player_index].current_lap_num
+            player_lap = packet.get_player_lap_data()
+            current_lap = player_lap.m_currentLapNum
         except Exception:
             current_lap = None
 
@@ -141,50 +161,99 @@ class TelemetryState:
     # ------------------------------------------------------------
     # High-level accessors Saul will use
     # ------------------------------------------------------------
+
     @property
-    def current_lap(self):
+    def session_time_left(self) -> Optional[int]:
+        if not self.session:
+            return None
+        return self.session.m_sessionTimeLeft
+
+    @property
+    def driver_status(self) -> Optional[int]:
         if not self.lap_data:
             return None
-        return self.lap_data.lap_data[self.player_index].current_lap_num
+        try:
+            return self.lap_data.get_player_lap_data().m_driverStatus
+        except Exception:
+            return None
 
     @property
-    def sector(self):
+    def pit_status(self) -> Optional[int]:
         if not self.lap_data:
             return None
-        return self.lap_data.lap_data[self.player_index].sector
+        try:
+            return self.lap_data.get_player_lap_data().m_pitStatus
+        except Exception:
+            return None
 
     @property
-    def speed(self):
+    def current_lap(self) -> Optional[int]:
+        if not self.lap_data:
+            return None
+        try:
+            return self.lap_data.get_player_lap_data().m_currentLapNum
+        except Exception:
+            return None
+
+    @property
+    def sector(self) -> Optional[int]:
+        if not self.lap_data:
+            return None
+        try:
+            return self.lap_data.get_player_lap_data().m_sector
+        except Exception:
+            return None
+
+    @property
+    def speed(self) -> Optional[int]:
         if not self.car_telemetry:
             return None
-        return self.car_telemetry.car_telemetry_data[self.player_index].speed
+        try:
+            return self.car_telemetry.get_player_telemetry().m_speed
+        except Exception:
+            return None
 
     @property
-    def throttle(self):
+    def throttle(self) -> Optional[float]:
         if not self.car_telemetry:
             return None
-        return self.car_telemetry.car_telemetry_data[self.player_index].throttle
+        try:
+            return self.car_telemetry.get_player_telemetry().m_throttle
+        except Exception:
+            return None
 
     @property
-    def brake(self):
+    def brake(self) -> Optional[float]:
         if not self.car_telemetry:
             return None
-        return self.car_telemetry.car_telemetry_data[self.player_index].brake
+        try:
+            return self.car_telemetry.get_player_telemetry().m_brake
+        except Exception:
+            return None
 
     @property
-    def steer(self):
+    def steer(self) -> Optional[float]:
         if not self.car_telemetry:
             return None
-        return self.car_telemetry.car_telemetry_data[self.player_index].steer
+        try:
+            return self.car_telemetry.get_player_telemetry().m_steer
+        except Exception:
+            return None
 
     @property
-    def drs_allowed(self):
+    def drs_allowed(self) -> Optional[int]:
         if not self.car_status:
             return None
-        return self.car_status.car_status_data[self.player_index].drs_allowed
+        try:
+            return self.car_status.get_player_status().m_drsAllowed
+        except Exception:
+            return None
 
     @property
-    def drs_activation_distance(self):
+    def drs_activation_distance(self) -> Optional[int]:
         if not self.car_status:
             return None
-        return self.car_status.car_status_data[self.player_index].drs_activation_distance
+        try:
+            return self.car_status.get_player_status().m_drsActivationDistance
+        except Exception:
+            return None

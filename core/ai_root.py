@@ -10,6 +10,7 @@ from .response_brain import ResponseBrain
 from .intent_parser import IntentParser
 from core.pause_manager import PauseManager
 from ui.text_box_ui import TextBoxUI
+from core.objective_manager import ObjectiveManager
 
 
 class AIRoot:
@@ -31,18 +32,21 @@ class AIRoot:
         self.response_brain = ResponseBrain(self.tone_engine, self.mood_engine)
         self.intent_parser = IntentParser()
 
-        # ---------------------------------------------------------
-        # Text Box UI (Tkinter)
-        # ---------------------------------------------------------
+        # Text input UI
         self.text_box = TextBoxUI(
             on_submit_callback=self.input_manager.submit_text
         )
         self.text_box.start()
 
-        # ---------------------------------------------------------
-        # Pause Manager
-        # ---------------------------------------------------------
+        # Pause Manager (deferred, set in saul_app.py)
         self.pause_manager = None
+
+        # Telemetry state and event router (deferred, set in saul_app.py)
+        self.telemetry_state = None
+        self.event_router = None
+
+        # Objective system (deferred, set in saul_app.py)
+        self.objective_manager = None
 
 
     def set_mode(self, mode_class):
@@ -52,7 +56,7 @@ class AIRoot:
         self.current_mode = mode_class(self.context)
         self.current_mode.on_enter()
 
-        # Visual Hint Per Mode 
+        # Visual Hint Per Mode
         name = mode_class.__name__
         if name == "AIMode":
             self.av_manager.set_visible(True)
@@ -76,6 +80,11 @@ class AIRoot:
                 current_mode=self.current_mode.__class__.__name__
             )
 
+        if self.current_mode and self.current_mode.__class__.__name__ == "F1EngineerMode":
+            if self.objective_manager:
+                self.objective_manager.update()
+
+
         # ---------------------------------------------------------
         # Mode update
         # ---------------------------------------------------------
@@ -86,4 +95,5 @@ class AIRoot:
                 self.response_brain,
                 self.av_manager,
                 self.tts_engine,
+                self.objective_manager,
             )

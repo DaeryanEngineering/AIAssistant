@@ -43,6 +43,16 @@ class InputManager:
         """
         self._text_buffer = text
 
+    def has_text(self):
+        return self._text_buffer is not None
+
+    def consume_text(self):
+        if self._text_buffer:
+            text = self._text_buffer
+            self._text_buffer = None
+            return text
+        return None
+
     def get_text(self):
         """
         AIMode and F1Mode call this once per update.

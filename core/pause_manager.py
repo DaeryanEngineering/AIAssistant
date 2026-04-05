@@ -6,10 +6,11 @@ class PauseManager:
     and freeze/unfreeze behavior for Engineer Mode.
     """
 
-    def __init__(self, telemetry_state, input_manager, text_box_ui):
+    def __init__(self, telemetry_state, input_manager, text_box_ui, objective_manager=None):
         self.telemetry = telemetry_state
         self.input_manager = input_manager
         self.text_box = text_box_ui
+        self.objective_manager = objective_manager
 
         self._last_session_time = None
         self.is_paused = False
@@ -43,10 +44,11 @@ class PauseManager:
 
         paused_now = self._detect_pause()
 
-        if paused_now:
-            objective_manager.freeze()
-        else:
-            objective_manager.resume()
+        if self.objective_manager:
+            if paused_now:
+                self.objective_manager.freeze()
+            else:
+                self.objective_manager.resume()
 
 
         # -------------------------
