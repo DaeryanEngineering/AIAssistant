@@ -26,7 +26,7 @@ class UDPListener:
             bytes | None
         """
         try:
-            data, _ = self.sock.recvfrom(4096)
+            data, _ = self.sock.recvfrom(8192)
             return data
         except BlockingIOError:
             return None

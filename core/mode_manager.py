@@ -2,7 +2,6 @@
 
 from enum import Enum, auto
 import psutil
-import time
 
 class SaulMode(Enum):
     AI = auto()          # F1 not running
@@ -22,8 +21,10 @@ class ModeManager:
     # PROCESS CHECK
     # ---------------------------------------------------------
     def _is_f1_running(self):
+        F1_NAMES = {"f1", "F1", "f12025", "F12025", "f124", "F124", "f123", "F123"}
         for proc in psutil.process_iter(['name']):
-            if proc.info['name'] and "F1" in proc.info['name']:
+            name = proc.info.get('name') or ''
+            if any(n in name for n in F1_NAMES):
                 return True
         return False
 
@@ -35,6 +36,10 @@ class ModeManager:
         Detect pause by checking if sessionTimeLeft stops changing.
         """
         session_time = self.telemetry.session_time_left
+
+        # No telemetry yet — can't determine pause state
+        if session_time is None:
+            return False
 
         if self._last_session_time is None:
             self._last_session_time = session_time

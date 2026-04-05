@@ -1,139 +1,195 @@
 # f1/engineer_brain.py
 
 from core.events import EventType
+from core.radio_lines import RadioLines
 
 
 class EngineerBrain:
     """
     Saul's race engineer brain.
     Receives high-level events from EventRouter and turns them into
-    radio lines via tts_engine.
+    radio lines via tts_engine, with warmth-aware line selection.
     """
 
-    def __init__(self, response_brain, tts_engine):
+    def __init__(self, response_brain, tts_engine, career_tracker):
         self.response_brain = response_brain
         self.tts_engine = tts_engine
+        self.career = career_tracker
 
     # ---------------------------------------------------------
-    # Internal helper
+    # Internal helper — routes through RadioLines
     # ---------------------------------------------------------
-    def _say(self, text: str):
-    
-        self.tts_engine.speak(
-            text,
-            radio=True,
-            play_beep=True,
-            voice_profile="saul_radio"
-        )
+    def _say(self, event_name: str, priority: bool = False, **kwargs):
+        line = RadioLines.get(event_name, self.career, **kwargs)
+        if line:
+            self.tts_engine.speak_async(
+                line,
+                priority=priority,
+                radio=True,
+                play_beep=True,
+                voice_profile="saul_radio"
+            )
 
     # ---------------------------------------------------------
     # Flag / safety events
     # ---------------------------------------------------------
     def handle_red_flag(self, **_):
-        self._say("Red flag. Return to the pits.")
+        self._say("red_flag", priority=True)
 
     def handle_red_flag_restart(self, **_):
-        self._say("Mode launch. Be careful into Turn 1.")
+        self._say("restart_grid_ready", priority=True)
 
     def handle_sc_start(self, **_):
-        self._say("Safety car deployed. Slow down and keep your delta positive.")
+        self._say("safety_car_deployed", priority=True)
 
     def handle_sc_restart(self, **_):
-        self._say("Safety car in this lap. Prepare for restart. No overtaking until the line.")
+        self._say("safety_car_in_this_lap", priority=True)
+
+    def handle_sc_end(self, **_):
+        self._say("safety_car_end")
 
     def handle_vsc_start(self, **_):
-        self._say("Virtual safety car. Reduce pace and keep your delta positive.")
+        self._say("vsc_deployed", priority=True)
 
     def handle_vsc_end(self, **_):
-        self._say("VSC ending. Get ready.")
+        self._say("vsc_end")
 
     def handle_sc_vsc_pit_recommendation(self, **_):
-        self._say("We’re considering a stop under safety car. Confirm if you want to box.")
+        self._say("safety_override")
 
     def handle_delta_freeze_start(self, **_):
-        self._say("Delta active. Keep it positive.")
+        self._say("delta_freeze_start")
 
     def handle_delta_freeze_end(self, **_):
-        self._say("Delta ending. Prepare to resume racing.")
+        self._say("delta_freeze_end")
 
     # ---------------------------------------------------------
     # Formation lap / start
     # ---------------------------------------------------------
     def handle_formation_lap(self, **_):
-        self._say("Mode formation. Warm the tyres and check the brakes.")
+        self._say("formation_lap", priority=True)
 
     def handle_find_grid_slot(self, **_):
-        self._say("Find your box on the grid.")
+        self._say("find_grid_slot")
 
     def handle_race_start(self, **_):
-        self._say("Mode launch. Be careful into Turn 1.")
+        self._say("race_start", priority=True)
 
     # ---------------------------------------------------------
     # Pit window / strategy
     # ---------------------------------------------------------
     def handle_pit_window(self, **_):
-        self._say("Box this lap. Confirm if you’re okay with the stop.")
+        self._say("pit_window_open")
 
     def handle_pit_reminder(self, **_):
-        self._say("Reminder: box this lap. Confirm if you’re staying out.")
+        self._say("pit_window_sector3")
+
+    def handle_pit_limiter_reminder(self, **_):
+        self._say("pit_limiter_reminder", priority=True)
+
+    def handle_pit_stop_quality(self, quality: str | None = None, **_):
+        if quality == "good":
+            self._say("pit_stop_quality_good", priority=True)
+        elif quality == "acceptable":
+            self._say("pit_stop_quality_acceptable", priority=True)
+        else:
+            self._say("pit_stop_quality_slow", priority=True)
 
     def handle_extend_stint(self, **_):
-        self._say("Understood. Extending the stint by one lap if it’s safe.")
+        self._say("extend_stint")
 
     def handle_safety_override(self, reason: str | None = None, **_):
-        if reason == "engine_fault":
-            self._say("We’ve got an engine issue. I need you to box. It’s not safe to continue.")
-        elif reason == "engine_seized":
-            self._say("Engine has seized. Box immediately and stop the car safely.")
-        elif reason == "puncture":
-            self._say("You’ve got a puncture. Box this lap, please.")
-        else:
-            self._say("Shawn, I need you to box. It’s not safe to continue.")
+        self._say("safety_override")
 
     def handle_strategy_update(self, component: str | None = None, value: int | None = None, **_):
         if component:
-            self._say(f"We’re adjusting your strategy because of {component} damage.")
+            self.tts_engine.speak_async(
+                f"We're adjusting your strategy because of {component} damage.",
+                radio=True, play_beep=True, voice_profile="saul_radio"
+            )
         else:
-            self._say("We’re changing your strategy because of the damage.")
+            self.tts_engine.speak_async(
+                "We're changing your strategy because of the damage.",
+                radio=True, play_beep=True, voice_profile="saul_radio"
+            )
 
     def handle_out_lap(self, **_):
-        self._say("Out lap. Build the temperature and check the balance.")
+        self.tts_engine.speak_async(
+            "Out lap. Build the temperature and check the balance.",
+            radio=True, play_beep=True, voice_profile="saul_radio"
+        )
 
     def handle_in_lap(self, **_):
-        self._say("In lap. Box this lap. Mind the delta on entry.")
+        self.tts_engine.speak_async(
+            "In lap. Box this lap. Mind the delta on entry.",
+            radio=True, play_beep=True, voice_profile="saul_radio"
+        )
 
     # ---------------------------------------------------------
     # Teammate / traffic
     # ---------------------------------------------------------
     def handle_teammate_pit(self, first_name: str | None = None, **_):
         if first_name:
-            self._say(f"{first_name} is boxing this lap.")
+            self._say("teammate_pitting", first=first_name)
         else:
-            self._say("Your teammate is boxing this lap.")
+            self._say("teammate_pitting", first="Your teammate")
+
+    def handle_teammate_dnf(self, first_name: str | None = None, **_):
+        if first_name:
+            self._say("teammate_dnf", first=first_name)
+        else:
+            self._say("teammate_dnf", first="Your teammate")
 
     # ---------------------------------------------------------
     # Qualifying
     # ---------------------------------------------------------
-    def handle_quali_push_start(self, **_):
-        self._say("Alright, give me everything on this lap.")
+    def handle_quali_goal(self, **_):
+        self._say("quali_goal")
 
-    def handle_quali_lap_end(self, position: int | None = None, **_):
+    def handle_quali_lap_complete(self, position: int | None = None, **_):
         if position is not None:
-            self._say(f"Lap complete. That’s P{position}.")
+            self._say("quali_lap_complete", position=position)
         else:
-            self._say("Lap complete. Time is on the board.")
+            self._say("quali_lap_complete", position=0)
+
+    def handle_quali_lap_invalid(self, **_):
+        self._say("quali_lap_invalid")
+
+    def handle_quali_provisional_pole(self, **_):
+        self._say("quali_provisional_pole")
+
+    def handle_quali_final_pole(self, **_):
+        self._say("quali_final_pole")
 
     def handle_quali_position_loss(self, position: int | None = None, **_):
         if position is not None:
-            self._say(f"We’ve dropped to P{position}. Might be worth going again.")
+            self._say("quali_position_lost", position=position)
         else:
-            self._say("We’ve lost a position. Might be worth going again.")
+            self._say("quali_position_lost", position=0)
+
+    def handle_quali_position_update(self, position: int | None = None, **_):
+        self._say("quali_position_update", position=position or 0)
+
+    def handle_quali_lap_complete_valid(self, lap: int | None = None, position: int | None = None, **_):
+        self._say("quali_lap_complete_valid", position=position or 0)
+
+    def handle_quali_lap_complete_invalid(self, lap: int | None = None, **_):
+        self._say("quali_lap_invalid")
+
+    def handle_quali_go_back_out(self, **_):
+        self._say("quali_go_back_out")
 
     def handle_quali_target(self, target_position: int | None = None, **_):
         if target_position is not None:
-            self._say(f"We need at least P{target_position} to make the cutoff.")
+            self.tts_engine.speak_async(
+                f"We need at least P{target_position} to make the cutoff.",
+                radio=True, play_beep=True, voice_profile="saul_radio"
+            )
         else:
-            self._say("We need a better lap to make the cutoff.")
+            self.tts_engine.speak_async(
+                "We need a better lap to make the cutoff.",
+                radio=True, play_beep=True, voice_profile="saul_radio"
+            )
 
     # ---------------------------------------------------------
     # Weather
@@ -143,64 +199,81 @@ class EngineerBrain:
                               trend: str | None = None,
                               **_):
         if minutes is not None and intensity:
-            self._say(f"{intensity.capitalize()} rain expected in about {minutes} minutes.")
+            self.tts_engine.speak_async(
+                f"{intensity.capitalize()} rain expected in about {minutes} minutes.",
+                radio=True, play_beep=True, voice_profile="saul_radio"
+            )
         elif minutes is not None:
-            self._say(f"Weather change expected in about {minutes} minutes.")
+            self.tts_engine.speak_async(
+                f"Weather change expected in about {minutes} minutes.",
+                radio=True, play_beep=True, voice_profile="saul_radio"
+            )
         else:
-            self._say("Track conditions are changing. Keep me updated on the grip.")
+            self.tts_engine.speak_async(
+                "Track conditions are changing. Keep me updated on the grip.",
+                radio=True, play_beep=True, voice_profile="saul_radio"
+            )
+
+    def handle_weather_changed(self, **_):
+        self._say("weather_changed")
+
+    def handle_rain_soon(self, minutes: int | None = None, **_):
+        if minutes is not None:
+            self._say("rain_soon", n=minutes)
+        else:
+            self._say("rain_soon", n=0)
+
+    def handle_track_drying(self, **_):
+        self._say("track_drying")
+
+    def handle_track_worsening(self, **_):
+        self._say("track_worsening")
+
+    def handle_crossover_to_full_wets(self, **_):
+        self._say("crossover_wets")
+
+    def handle_crossover_to_inters(self, **_):
+        self._say("crossover_inters")
+
+    def handle_crossover_to_slicks(self, **_):
+        self._say("crossover_slicks")
 
     # ---------------------------------------------------------
-    # Gap formatting helper (0.7 → "seven-tenths")
-    # ---------------------------------------------------------
-    def _format_gap(self, gap: float | None) -> str:
-        if gap is None:
-            return ""
-
-        # Under 1 second → tenths
-        if gap < 1.0:
-            tenths = int(round(gap * 10))
-            return f"{tenths}-tenths"
-
-        # 1.0+ → "## seconds"
-        if gap > 1.0:
-            return f"{gap:.1f} seconds"
-
-    # ---------------------------------------------------------
-    # Gaps / lap start
+    # Gap reports — every racing lap
     # ---------------------------------------------------------
     def handle_gap_report(self, lap: int | None = None,
                           ahead_name: str | None = None,
                           ahead_gap: float | None = None,
+                          ahead_lap_diff: int = 0,
                           behind_name: str | None = None,
                           behind_gap: float | None = None,
+                          behind_lap_diff: int = 0,
+                          position: int | None = None,
                           **_):
-        parts = []
+        from core.radio_lines import RadioLines
 
+        gap_parts = []
         if lap is not None:
-            parts.append(f"Lap {lap}.")
+            gap_parts.append(f"P{position}" if position is not None else f"Lap {lap}")
 
-        if ahead_name and ahead_gap is not None:
-            parts.append(f"{ahead_name} ahead. {self._format_gap(ahead_gap)}.")
+        if ahead_name:
+            ahead_text = RadioLines.format_gap_text(ahead_gap or 0, ahead_lap_diff)
+            gap_parts.append(f"{ahead_name} ahead, {ahead_text}")
 
-        if behind_name and behind_gap is not None:
-            parts.append(f"{behind_name} behind. {self._format_gap(behind_gap)}.")
+        if behind_name:
+            behind_text = RadioLines.format_gap_text(behind_gap or 0, behind_lap_diff)
+            gap_parts.append(f"{behind_name} behind, {behind_text}")
 
-        if not parts:
-            parts.append("Gaps are stable. Keep doing what you’re doing.")
+        if not gap_parts:
+            return
 
-        self._say(" ".join(parts))
-
-    # ---------------------------------------------------------
-    # Weather
-    # ---------------------------------------------------------
-    def handle_crossover_to_full_wets(self, **_):
-        self._say("Conditions are extreme. Full wets are the right tyre now.")
-
-    def handle_crossover_to_inters(self, **_):
-        self._say("Track is too wet for slicks. Intermediates are the right tyre now.")
-
-    def handle_crossover_to_slicks(self, **_):
-        self._say("Conditions are dry. Inters are costing you time. Come in for slicks.")
+        line = " ".join(gap_parts)
+        self.tts_engine.speak_async(
+            line,
+            radio=True,
+            play_beep=True,
+            voice_profile="saul_radio"
+        )
 
     # ---------------------------------------------------------
     # Last 5 laps / Last lap
@@ -213,26 +286,25 @@ class EngineerBrain:
                               podium_on_the_line: bool = False,
                               win_on_the_line: bool = False,
                               **_):
-
-        parts = ["Five laps to go."]
-
-        # Contextual race picture
-        if ahead_name and ahead_gap is not None:
-            parts.append(f"{self._format_gap(ahead_gap)} to {ahead_name} ahead.")
-
-        if behind_name and behind_gap is not None:
-            parts.append(f"{self._format_gap(behind_gap)} to {behind_name} behind.")
-
-        # Stakes
         if win_on_the_line:
-            parts.append("This is for the win.")
-        elif podium_on_the_line:
-            parts.append("This is for the podium.")
+            self.tts_engine.speak_async(
+                "Five laps to go. This is for the win.",
+                radio=True, play_beep=True, voice_profile="saul_radio"
+            )
+            return
+        if podium_on_the_line:
+            self.tts_engine.speak_async(
+                "Five laps to go. This is for the podium.",
+                radio=True, play_beep=True, voice_profile="saul_radio"
+            )
+            return
 
-        # Calm, realistic tone
-        parts.append("Keep it tidy.")
-
-        self._say(" ".join(parts))
+        self._say("last_five_laps",
+                  position=position or 0,
+                  ahead=ahead_name or "",
+                  gap=RadioLines.format_gap(ahead_gap) if ahead_gap else "",
+                  behind=behind_name or "",
+                  behind_gap=RadioLines.format_gap(behind_gap) if behind_gap else "")
 
     def handle_last_lap(self, position: int | None = None,
                         ahead_name: str | None = None,
@@ -244,37 +316,178 @@ class EngineerBrain:
                         under_threat: bool = False,
                         attacking: bool = False,
                         **_):
-
-        # Opening line
         if win_on_the_line:
-            self._say("Last lap. This is for the win. Bring it home.")
+            self.tts_engine.speak_async(
+                "Last lap. This is for the win. Bring it home.",
+                radio=True, play_beep=True, voice_profile="saul_radio"
+            )
             return
-
         if podium_on_the_line:
-            self._say("Last lap. This is for the podium. Keep it clean.")
+            self.tts_engine.speak_async(
+                "Last lap. This is for the podium. Keep it clean.",
+                radio=True, play_beep=True, voice_profile="saul_radio"
+            )
+            return
+        if under_threat and behind_gap and behind_name:
+            self.tts_engine.speak_async(
+                f"Last lap. {RadioLines.format_gap(behind_gap)} to {behind_name} behind. Defend the position.",
+                radio=True, play_beep=True, voice_profile="saul_radio"
+            )
+            return
+        if attacking and ahead_gap and ahead_name:
+            self.tts_engine.speak_async(
+                f"Last lap. {RadioLines.format_gap(ahead_gap)} to {ahead_name} ahead. Push to the line.",
+                radio=True, play_beep=True, voice_profile="saul_radio"
+            )
             return
 
-        # Battle logic
-        if under_threat and behind_gap and behind_name is not None:
-            self._say(f"Last lap. {self._format_gap(behind_gap)} to {behind_name} behind. Defend the position.")
+        self._say("last_lap",
+                  position=position or 0,
+                  ahead=ahead_name or "",
+                  gap=RadioLines.format_gap(ahead_gap) if ahead_gap else "",
+                  behind=behind_name or "",
+                  behind_gap=RadioLines.format_gap(behind_gap) if behind_gap else "")
+
+    # ---------------------------------------------------------
+    # Race finish
+    # ---------------------------------------------------------
+    def handle_race_finish(self, position: int | None = None, points: int | None = None, **_):
+        if position is None:
             return
-
-        if attacking and ahead_gap and ahead_name is not None:
-            self._say(f"Last lap. {self._format_gap(ahead_gap)} to {ahead_name} ahead. Push to the line.")
-            return
-
-        # Neutral scenario
-        self._say("Last lap. Bring it home. No risks.")
-
+        if position == 1:
+            self._say("race_finish_p1", priority=True, position=1)
+        elif position <= 6:
+            self._say("race_finish_p2_p6", position=position)
+        elif position <= 11:
+            self._say("race_finish_p7_p11", position=position)
+        elif position <= 16:
+            self._say("race_finish_p12_p16", position=position)
+        else:
+            self._say("race_finish_p17_p22", position=position)
 
     # ---------------------------------------------------------
     # End of race / titles
     # ---------------------------------------------------------
     def handle_race_win(self, **_):
-        self._say("That’s the win. Incredible drive.")
+        self._say("race_win", priority=True)
 
-    def handle_constructors_title(self, **_):
-        self._say("That seals it. We’ve won the Constructors’ Championship.")
+    def handle_constructors_title(self, position: int | None = None, team: str | None = None, **_):
+        self._say("constructors_title", priority=True,
+                  position=position or 0, team=team or "your team")
 
-    def handle_drivers_title(self, **_):
-        self._say("Shawn… you’re World Champion.")
+    def handle_drivers_title(self, is_first: bool = False, **_):
+        if is_first:
+            self._say("drivers_title_first", priority=True)
+        else:
+            self._say("drivers_title_consecutive", priority=True)
+
+    # ---------------------------------------------------------
+    # Session events
+    # ---------------------------------------------------------
+    def handle_session_start(self, **_):
+        self._say("session_start")
+
+    def handle_session_end(self, **_):
+        self._say("session_end")
+
+    def handle_session_type_changed(self, **_):
+        self._say("session_type_changed")
+
+    # ---------------------------------------------------------
+    # Garage events
+    # ---------------------------------------------------------
+    def handle_garage_entered(self, **_):
+        self._say("garage_entered")
+
+    def handle_garage_exited(self, **_):
+        self._say("garage_exited")
+
+    # ---------------------------------------------------------
+    # Lap start
+    # ---------------------------------------------------------
+    def handle_lap_start(self, lap: int | None = None, **_):
+        self._say("lap_start", lap=lap or 0)
+
+    # ---------------------------------------------------------
+    # Lap invalidated
+    # ---------------------------------------------------------
+    def handle_lap_invalidated(self, **_):
+        self._say("lap_invalidated")
+
+    # ---------------------------------------------------------
+    # Pit entry / exit
+    # ---------------------------------------------------------
+    def handle_pit_entry(self, **_):
+        self._say("pit_entry")
+
+    def handle_pit_exit(self, **_):
+        self._say("pit_exit")
+
+    # ---------------------------------------------------------
+    # Pit limiter (voice-only events)
+    # ---------------------------------------------------------
+    def handle_pit_limiter_on(self, **_):
+        self._say("pit_limiter_on")
+
+    def handle_pit_limiter_off(self, **_):
+        self._say("pit_limiter_off")
+
+    # ---------------------------------------------------------
+    # Track flags
+    # ---------------------------------------------------------
+    def handle_track_green(self, **_):
+        self._say("track_green")
+
+    def handle_track_yellow(self, **_):
+        self._say("track_yellow")
+
+    def handle_track_double_yellow(self, **_):
+        self._say("track_double_yellow")
+
+    # ---------------------------------------------------------
+    # On track entered / exited
+    # ---------------------------------------------------------
+    def handle_on_track_entered(self, **_):
+        pass
+
+    def handle_on_track_exited(self, **_):
+        pass
+
+    # ---------------------------------------------------------
+    # Quali lap start
+    # ---------------------------------------------------------
+    def handle_quali_lap_start(self, lap: int | None = None, **_):
+        self._say("lap_start", lap=lap or 0)
+
+    # ---------------------------------------------------------
+    # Pit lane / service events (informational only)
+    # ---------------------------------------------------------
+    def handle_pit_lane_entered(self, **_):
+        pass
+
+    def handle_pit_lane_exited(self, **_):
+        pass
+
+    def handle_pit_service_start(self, **_):
+        pass
+
+    def handle_pit_service_end(self, **_):
+        pass
+
+    def handle_pit_release(self, **_):
+        pass
+
+    def handle_pit_entry_line(self, **_):
+        self._say("pit_entry_line")
+
+    def handle_pit_exit_line(self, **_):
+        self._say("pit_exit_line")
+
+    # ---------------------------------------------------------
+    # Forecast changes (handled by weather_changed)
+    # ---------------------------------------------------------
+    def handle_forecast_rain_change(self, **_):
+        pass
+
+    def handle_forecast_weather_change(self, **_):
+        self._say("forecast_weather_change")

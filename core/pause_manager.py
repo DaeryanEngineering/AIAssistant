@@ -1,37 +1,22 @@
 # core/pause_manager.py
 
+from core.mode_manager import ModeManager, SaulMode
+
+
 class PauseManager:
     """
-    Handles pause/unpause detection, text box visibility,
-    and freeze/unfreeze behavior for Engineer Mode.
+    Handles text box visibility and freeze/unfreeze behavior for Engineer Mode.
+    Pause state is driven by ModeManager (single source of truth).
     """
 
-    def __init__(self, telemetry_state, input_manager, text_box_ui, objective_manager=None):
+    def __init__(self, telemetry_state, input_manager, text_box_ui, objective_manager=None, mode_manager=None):
         self.telemetry = telemetry_state
         self.input_manager = input_manager
         self.text_box = text_box_ui
         self.objective_manager = objective_manager
+        self.mode_manager = mode_manager
 
-        self._last_session_time = None
         self.is_paused = False
-
-    # ---------------------------------------------------------
-    # PAUSE DETECTION
-    # ---------------------------------------------------------
-    def _detect_pause(self):
-        """
-        Detect pause by checking if sessionTimeLeft stops changing.
-        """
-        session_time = self.telemetry.session_time_left
-
-        if self._last_session_time is None:
-            self._last_session_time = session_time
-            return False
-
-        paused = (session_time == self._last_session_time)
-        self._last_session_time = session_time
-
-        return paused
 
     # ---------------------------------------------------------
     # UPDATE LOOP
@@ -41,15 +26,14 @@ class PauseManager:
         Called every frame by AIRoot.
         Controls text box visibility and pause state.
         """
-
-        paused_now = self._detect_pause()
+        # Get pause state from ModeManager (single source of truth)
+        paused_now = (self.mode_manager.current_mode == SaulMode.PAUSED) if self.mode_manager else False
 
         if self.objective_manager:
-            if paused_now:
+            if paused_now and not self.is_paused:
                 self.objective_manager.freeze()
-            else:
+            elif not paused_now and self.is_paused:
                 self.objective_manager.resume()
-
 
         # -------------------------
         # ENTERING PAUSE

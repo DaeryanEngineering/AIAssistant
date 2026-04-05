@@ -18,9 +18,13 @@ class F1EngineerMode(F1Mode):
         print("[F1EngineerMode] Entered (on-track, radio-only)")
         self.waiting_for_user = False
 
-    def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine, objective_manager=None):
+    def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine, objective_manager=None, ers_drs_manager=None):
         # Engineer mode is radio-only, hidden
         av_manager.set_visible(False)
+
+        # Auto DRS/ERS/weather/pit — runs every tick
+        if ers_drs_manager:
+            ers_drs_manager.update()
 
         # --- OBJECTIVE / CHAMPIONSHIP HANDLING (from pause text box) ---
         if input_manager.has_text():

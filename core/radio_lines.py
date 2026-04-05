@@ -13,9 +13,9 @@ class RadioLines:
     Lines evolve over an 11-year career arc.
     """
 
-    # ---------------------------------------------------------
+    # =========================================================
     # NAME INJECTION
-    # ---------------------------------------------------------
+    # =========================================================
 
     @staticmethod
     def _maybe_name(career: CareerTracker) -> str:
@@ -28,9 +28,34 @@ class RadioLines:
         name = RadioLines._maybe_name(career)
         return line.format(name=name, **kwargs)
 
-    # ---------------------------------------------------------
-    # OBJECTIVE START
-    # ---------------------------------------------------------
+    # =========================================================
+    # GAP FORMATTING
+    # =========================================================
+
+    @staticmethod
+    def format_gap(seconds: float) -> str:
+        if seconds < 1.0:
+            tenths = int(round(seconds * 10))
+            return f"{tenths}-tenths"
+        return f"{seconds:.1f} seconds"
+
+    @staticmethod
+    def format_gap_text(seconds: float, lap_diff: int = 0) -> str:
+        """
+        Format gap into spoken text.
+        lap_diff > 0 means the other car is that many laps ahead/behind.
+        """
+        if lap_diff >= 2:
+            return f"{lap_diff} laps"
+        if lap_diff == 1:
+            return "a lap"
+        if seconds > 55.0:
+            return "more than 60 seconds"
+        return RadioLines.format_gap(seconds)
+
+    # =========================================================
+    # OBJECTIVE LINES (existing)
+    # =========================================================
 
     _objective_start = {
         "LAP_TIME": {
@@ -277,7 +302,6 @@ class RadioLines:
         },
     }
 
-    # Fallback for unrecognized types
     _objective_start_generic = {
         "sharp": [
             "Objective received: {description}. I'll track it. Whether you execute is another question{name}.",
@@ -300,10 +324,6 @@ class RadioLines:
             "Noted: {description}. Let's get it done.",
         ],
     }
-
-    # ---------------------------------------------------------
-    # OBJECTIVE PASS
-    # ---------------------------------------------------------
 
     _objective_pass = {
         "sharp": [
@@ -336,10 +356,6 @@ class RadioLines:
         ],
     }
 
-    # ---------------------------------------------------------
-    # OBJECTIVE FAIL
-    # ---------------------------------------------------------
-
     _objective_fail = {
         "sharp": [
             "Objective failed. I'm not even surprised{name}.",
@@ -370,10 +386,6 @@ class RadioLines:
             "Objective failed. We'll regroup and move forward.",
         ],
     }
-
-    # ---------------------------------------------------------
-    # OBJECTIVE CANCEL
-    # ---------------------------------------------------------
 
     _objective_cancel = {
         "sharp": [
@@ -406,9 +418,9 @@ class RadioLines:
         ],
     }
 
-    # ---------------------------------------------------------
+    # =========================================================
     # TITLE SCENARIOS
-    # ---------------------------------------------------------
+    # =========================================================
 
     _f2_championship = [
         "F2 champion. You belong here, Shawn. F1 won't know what hit it.",
@@ -448,10 +460,6 @@ class RadioLines:
         "{n} championships. We've come a long way from that first F2 season, Shawn.",
     ]
 
-    # ---------------------------------------------------------
-    # CAREER MILESTONES
-    # ---------------------------------------------------------
-
     _year_5 = [
         "Five years. We've been together a while now, Shawn. Let's keep it going.",
         "Year five. Half a decade of this. Not bad for a partnership{name}.",
@@ -464,9 +472,1720 @@ class RadioLines:
         "A decade. Ten years of races, titles, and everything in between. Wouldn't trade it.",
     ]
 
-    # ---------------------------------------------------------
+    # =========================================================
+    # RACE EVENT LINES
+    # =========================================================
+
+    _race_events = {
+        # ---------------------------------------------------------
+        # RACE GAP — every racing lap, not lap 1, not SC/VSC/Red
+        # Structure: P{position}. {ahead} ahead, {gap}. {behind} behind, {behind_gap}.
+        # All lines include explicit "ahead" and "behind".
+        # P1-P5 in supportive/partnership get encouragement. P6+ straight data.
+        # ---------------------------------------------------------
+        "race_gap": {
+            "sharp": [
+                "P{position}. {ahead} ahead, {gap}. {behind} behind, {behind_gap}.",
+                "P{position}. Gap to {ahead} ahead: {gap}. {behind} {behind_gap} behind.",
+                "P{position}. {ahead} {gap} ahead. {behind} {behind_gap} behind.",
+                "P{position}. {gap} to {ahead} ahead. {behind} {behind_gap} behind.",
+                "P{position}. {ahead} ahead, {gap}. {behind} behind, {behind_gap}.",
+            ],
+            "professional": [
+                "P{position}. {ahead} ahead, {gap}. {behind} behind, {behind_gap}.",
+                "P{position}. Gap to {ahead} ahead: {gap}. {behind} {behind_gap} behind.",
+                "P{position}. {ahead} {gap} ahead. {behind} {behind_gap} behind.",
+                "P{position}. {gap} to {ahead} ahead. {behind} {behind_gap} behind.",
+                "P{position}. {ahead} ahead, {gap}. {behind} behind, {behind_gap}.",
+            ],
+            "supportive_p1_p5": [
+                "P{position}. {ahead} ahead, {gap}. {behind} behind, {behind_gap}. Looking good.",
+                "P{position}. Gap to {ahead} ahead: {gap}. {behind} {behind_gap} behind. Solid.",
+                "P{position}. {ahead} {gap} ahead. {behind} {behind_gap} behind. Looking good.",
+                "P{position}. {gap} to {ahead} ahead. {behind} {behind_gap} behind. Solid.",
+                "P{position}. {ahead} ahead, {gap}. {behind} behind, {behind_gap}. Good.",
+            ],
+            "supportive_p6_plus": [
+                "P{position}. {ahead} ahead, {gap}. {behind} behind, {behind_gap}.",
+                "P{position}. Gap to {ahead} ahead: {gap}. {behind} {behind_gap} behind.",
+                "P{position}. {ahead} {gap} ahead. {behind} {behind_gap} behind.",
+                "P{position}. {gap} to {ahead} ahead. {behind} {behind_gap} behind.",
+                "P{position}. {ahead} ahead, {gap}. {behind} behind, {behind_gap}.",
+            ],
+            "partnership_p1_p5": [
+                "P{position}. {ahead} ahead, {gap}. {behind} behind, {behind_gap}. Looking good.",
+                "P{position}. Gap to {ahead} ahead: {gap}. {behind} {behind_gap} behind. Solid.",
+                "P{position}. {ahead} {gap} ahead. {behind} {behind_gap} behind. Looking good.",
+                "P{position}. {gap} to {ahead} ahead. {behind} {behind_gap} behind. Solid.",
+                "P{position}. {ahead} ahead, {gap}. {behind} behind, {behind_gap}. Good.",
+            ],
+            "partnership_p6_plus": [
+                "P{position}. {ahead} ahead, {gap}. {behind} behind, {behind_gap}.",
+                "P{position}. Gap to {ahead} ahead: {gap}. {behind} {behind_gap} behind.",
+                "P{position}. {ahead} {gap} ahead. {behind} {behind_gap} behind.",
+                "P{position}. {gap} to {ahead} ahead. {behind} {behind_gap} behind.",
+                "P{position}. {ahead} ahead, {gap}. {behind} behind, {behind_gap}.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # RACE FINISH — P1
+        # ---------------------------------------------------------
+        "race_finish_p1": {
+            "sharp": [
+                "Race complete. P1.",
+                "P1. Good work.",
+                "P1. Brought it home.",
+            ],
+            "professional": [
+                "Race complete. P1.",
+                "P1. Good work.",
+                "P1. Brought it home.",
+            ],
+            "supportive": [
+                "Race complete. P1.",
+                "P1. Good work today.",
+                "P1. That's a solid win.",
+            ],
+            "partnership": [
+                "Race complete. P1.",
+                "P1. Like we always do.",
+                "P1. Good work today.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # RACE FINISH — P2 to P6
+        # ---------------------------------------------------------
+        "race_finish_p2_p6": {
+            "sharp": [
+                "Race complete. P{position}.",
+                "P{position}. Not bad.",
+                "P{position}. Solid result.",
+            ],
+            "professional": [
+                "Race complete. P{position}.",
+                "P{position}. Good result.",
+                "P{position}.",
+            ],
+            "supportive": [
+                "Race complete. P{position}. A solid finish.",
+                "P{position}. Well driven.",
+                "P{position}. That's a good result.",
+            ],
+            "partnership": [
+                "Race complete. P{position}.",
+                "P{position}. A solid finish. We did well today.",
+                "P{position}. Good work today.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # RACE FINISH — P7 to P11
+        # ---------------------------------------------------------
+        "race_finish_p7_p11": {
+            "sharp": [
+                "Race complete. P{position}. Points.",
+                "P{position}. On the board.",
+                "P{position}. Points secured.",
+            ],
+            "professional": [
+                "Race complete. P{position}.",
+                "P{position}. Points.",
+                "P{position}. On the board.",
+            ],
+            "supportive": [
+                "Race complete. P{position}. A fighting finish.",
+                "P{position}. Points secured.",
+                "P{position}. That's racing.",
+            ],
+            "partnership": [
+                "Race complete. P{position}. Points.",
+                "P{position}. We fought for that one.",
+                "P{position}. On the board.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # RACE FINISH — P12 to P16
+        # ---------------------------------------------------------
+        "race_finish_p12_p16": {
+            "sharp": [
+                "Race complete. P{position}. Outside the points.",
+                "P{position}. Not the result we wanted.",
+                "P{position}. Just outside.",
+            ],
+            "professional": [
+                "Race complete. P{position}.",
+                "P{position}. Outside the points.",
+                "P{position}. Not the day we needed.",
+            ],
+            "supportive": [
+                "Race complete. P{position}. Outside the points, but we gave it a go.",
+                "P{position}. Not quite.",
+                "P{position}. We'll come back stronger.",
+            ],
+            "partnership": [
+                "Race complete. P{position}.",
+                "P{position}. Outside the points. We'll work on it.",
+                "P{position}. We'll regroup.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # RACE FINISH — P17 to P22
+        # ---------------------------------------------------------
+        "race_finish_p17_p22": {
+            "sharp": [
+                "Race complete. P{position}. Difficult day.",
+                "P{position}. Not the result we deserved.",
+                "P{position}.",
+            ],
+            "professional": [
+                "Race complete. P{position}.",
+                "P{position}. A tough one.",
+                "P{position}. Not the day.",
+            ],
+            "supportive": [
+                "Race complete. P{position}. A difficult day. We'll regroup.",
+                "P{position}. Not the result we wanted.",
+                "P{position}. We'll come back from this.",
+            ],
+            "partnership": [
+                "Race complete. P{position}.",
+                "P{position}. We'll get them next time.",
+                "P{position}. A tough day. We'll work through it together.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # RACE WIN
+        # ---------------------------------------------------------
+        "race_win": {
+            "sharp": [
+                "Race win. Incredible.",
+                "You did it. P1.",
+                "P1. That's the way to do it.",
+            ],
+            "professional": [
+                "Race win. Incredible drive.",
+                "P1. Well done.",
+                "Race win. That's how it's done.",
+            ],
+            "supportive": [
+                "Race win. You did it, Shawn.",
+                "P1. Incredible. Well done.",
+                "Race win. That was driven beautifully.",
+            ],
+            "partnership": [
+                "Race win. We did it.",
+                "P1. Like we always knew you could.",
+                "Race win. Together.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # CONSTRUCTORS CHAMPIONSHIP
+        # ---------------------------------------------------------
+        "constructors_title": {
+            "sharp": [
+                "P{position}. That seals it. {team} has won the Constructors' Championship.",
+                "Constructors' title. {team}. That's done.",
+                "{team} wins the Constructors'. P{position}.",
+            ],
+            "professional": [
+                "P{position}. {team} wins the Constructors' Championship.",
+                "Constructors' Championship. {team}. P{position}. Done.",
+                "{team} takes the Constructors'. P{position}.",
+            ],
+            "supportive": [
+                "P{position}. That seals it. {team} has won the Constructors' Championship. Incredible effort from the whole team.",
+                "Constructors' Championship. {team}. P{position}. Well done, everyone.",
+                "{team} wins the Constructors'. P{position}.",
+            ],
+            "partnership": [
+                "P{position}. {team}. We did this together.",
+                "Constructors' Championship. {team}. P{position}. Like we always knew we would.",
+                "{team} wins the Constructors'. P{position}. All of us.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # DRIVERS CHAMPIONSHIP — First time
+        # ---------------------------------------------------------
+        "drivers_title_first": {
+            "sharp": [
+                "Shawn… you're World Champion. Every step of the way.",
+            ],
+            "professional": [
+                "World Champion. You did it, Shawn.",
+            ],
+            "supportive": [
+                "Shawn… you're World Champion. I always knew you could.",
+            ],
+            "partnership": [
+                "World Champion. We did this together, Shawn. Every single step.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # DRIVERS CHAMPIONSHIP — Consecutive
+        # ---------------------------------------------------------
+        "drivers_title_consecutive": {
+            "sharp": [
+                "Back-to-back. You're World Champion again.",
+                "Another one. World Champion.",
+                "World Champion. Again.",
+            ],
+            "professional": [
+                "World Champion. Another one.",
+                "Back-to-back. Well done.",
+                "World Champion. You did it again.",
+            ],
+            "supportive": [
+                "World Champion. Another one. You never stopped.",
+                "Back-to-back. Incredible.",
+                "World Champion again. Well done, Shawn.",
+            ],
+            "partnership": [
+                "World Champion. Like we always knew it would happen.",
+                "Another one. We did this together.",
+                "World Champion. Right where we belong.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # FORMATION LAP
+        # ---------------------------------------------------------
+        "formation_lap": {
+            "sharp": [
+                "Formation lap. Warm the tyres. Check the brakes.",
+                "Formation. Don't stall. Warm the tyres.",
+                "Mode formation. Procedure.",
+            ],
+            "professional": [
+                "Formation lap. Warm the tyres and brakes.",
+                "Formation mode. Procedure.",
+                "Formation. Stay close to the car ahead.",
+            ],
+            "supportive": [
+                "Formation lap. You've done this a thousand times.",
+                "Formation. Warm up and stay focused.",
+                "Formation lap. You've got this.",
+            ],
+            "partnership": [
+                "Formation lap. Like we always do.",
+                "Formation. We know this one.",
+                "Formation lap. Stay right where you are.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # FIND GRID SLOT
+        # ---------------------------------------------------------
+        "find_grid_slot": {
+            "sharp": [
+                "Find your grid slot. Now.",
+                "Grid slot. Don't overshoot.",
+            ],
+            "professional": [
+                "Grid slot. Park it.",
+                "Find your position. Park it clean.",
+            ],
+            "supportive": [
+                "Find your box. Park it clean.",
+                "Almost there. Grid slot.",
+            ],
+            "partnership": [
+                "Your box. We know where it is.",
+                "Grid slot. Park it.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # RACE START
+        # ---------------------------------------------------------
+        "race_start": {
+            "sharp": [
+                "Mode launch. Turn 1. Don't be a hero.",
+                "Lights out. Go.",
+                "Launch. Be smart into Turn 1.",
+                "Go. No mistakes.",
+                "This is it. Launch.",
+            ],
+            "professional": [
+                "Mode launch. Be clean into Turn 1.",
+                "Lights out. Stay focused.",
+                "Go. Good start.",
+                "Launch. Smart into Turn 1.",
+                "Green light. Let's race.",
+            ],
+            "supportive": [
+                "Mode launch. Trust yourself. Go.",
+                "Lights out. You've got this.",
+                "Go. Let's see what you've got.",
+                "Mode launch. Enjoy it.",
+                "Launch. Let's race.",
+            ],
+            "partnership": [
+                "Mode launch. Let's go.",
+                "Lights out. Let's do what we do.",
+                "Launch. We've got this.",
+                "Go. Like we always do.",
+                "This is it. Together.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # SAFETY CAR DEPLOYED
+        # ---------------------------------------------------------
+        "safety_car_deployed": {
+            "sharp": [
+                "Safety car. Delta positive. Don't lose time.",
+                "SC deployed. Slow down. Keep the gap.",
+                "Safety car. Stay in the window.",
+                "SC. Delta positive or box.",
+            ],
+            "professional": [
+                "Safety car deployed. Delta positive.",
+                "SC out. Manage the gap and the temps.",
+                "Safety car. Keep it clean.",
+                "SC deployed. Reduce pace, keep the gap.",
+            ],
+            "supportive": [
+                "Safety car. Stay calm. Delta positive.",
+                "SC. You've handled these before.",
+                "Safety car. Keep the tyres warm and the delta in the window.",
+            ],
+            "partnership": [
+                "Safety car. Like we always do. Delta positive.",
+                "SC. We've got this.",
+                "Safety car. Stay right where you are.",
+                "SC. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # SAFETY CAR IN THIS LAP
+        # ---------------------------------------------------------
+        "safety_car_in_this_lap": {
+            "sharp": [
+                "SC in this lap. No overtaking until the line.",
+                "Safety car in. Don't cross until the line.",
+                "SC this lap. Hold position.",
+            ],
+            "professional": [
+                "Safety car in this lap. No overtaking until the line.",
+                "SC in. Maintain position.",
+                "Safety car in. Hold your grid position.",
+            ],
+            "supportive": [
+                "SC in this lap. Hold your position.",
+                "Safety car. One more lap. Stay calm.",
+                "SC in. Almost there.",
+            ],
+            "partnership": [
+                "SC in this lap. Like we always do. Hold it.",
+                "Safety car in. Almost there.",
+                "SC in. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # SAFETY CAR END (green flag)
+        # ---------------------------------------------------------
+        "safety_car_end": {
+            "sharp": [
+                "Green flag. Go.",
+                "SC ending. Green. Push now.",
+                "Green. Go. Push.",
+                "Green flag. Racing.",
+            ],
+            "professional": [
+                "Safety car ending. Green flag.",
+                "SC ending. Green flag. Let's go.",
+                "Green flag. Racing.",
+                "Green. Push now.",
+            ],
+            "supportive": [
+                "Green flag. Back to it.",
+                "SC ending. Go. You've got this.",
+                "Green. Let's race.",
+            ],
+            "partnership": [
+                "Green flag. Like we always do.",
+                "SC ending. Let's race.",
+                "Green. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # VSC DEPLOYED
+        # ---------------------------------------------------------
+        "vsc_deployed": {
+            "sharp": [
+                "VSC. Delta positive. Stay in the window.",
+                "Virtual safety car. Reduce pace.",
+                "VSC. Watch the delta.",
+            ],
+            "professional": [
+                "Virtual safety car. Delta positive.",
+                "VSC. Manage the gap.",
+                "Virtual safety car. Reduce pace.",
+            ],
+            "supportive": [
+                "VSC. Stay calm. Keep the delta.",
+                "VSC. You've handled these.",
+                "Virtual safety car. Stay in the window.",
+            ],
+            "partnership": [
+                "VSC. Like we always do.",
+                "Virtual safety car. We'll manage it.",
+                "VSC. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # VSC END
+        # ---------------------------------------------------------
+        "vsc_end": {
+            "sharp": [
+                "VSC ending. Get ready.",
+                "VSC in. Short one. Go.",
+                "VSC ending. Almost green.",
+            ],
+            "professional": [
+                "VSC ending. Almost green.",
+                "VSC in. Get ready to go.",
+                "VSC ending. Almost there.",
+            ],
+            "supportive": [
+                "VSC ending. Almost there.",
+                "VSC in. Stay sharp.",
+                "VSC ending. Almost green.",
+            ],
+            "partnership": [
+                "VSC ending. Almost green.",
+                "VSC in. Ready when you are.",
+                "VSC ending. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # RED FLAG
+        # ---------------------------------------------------------
+        "red_flag": {
+            "sharp": [
+                "Red flag. Box. Now.",
+                "Red flag. Return to the pits. End of it.",
+            ],
+            "professional": [
+                "Red flag. Return to the pits.",
+                "Red flag. Head to the garage.",
+                "Red flag. Back to the pits.",
+            ],
+            "supportive": [
+                "Red flag. Back to the pits. It's over.",
+                "Red flag. Head to the garage.",
+            ],
+            "partnership": [
+                "Red flag. Back to the garage.",
+                "Red flag. We'll wait it out together.",
+                "Red flag. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # RESTART GRID READY
+        # ---------------------------------------------------------
+        "restart_grid_ready": {
+            "sharp": [
+                "Grid ready. Mode launch. Be smart.",
+                "Restart ready. No heroics.",
+                "Restart ready. Mode launch.",
+            ],
+            "professional": [
+                "Grid ready. Mode launch.",
+                "Restart ready. Clean start.",
+                "Restart ready. Mode launch. Be clean.",
+            ],
+            "supportive": [
+                "Restart ready. You've done this.",
+                "Grid ready. Mode launch.",
+                "Restart ready. You've got this.",
+            ],
+            "partnership": [
+                "Grid ready. Like we always do.",
+                "Restart ready. Let's go again.",
+                "Grid ready. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # DELTA FREEZE START
+        # ---------------------------------------------------------
+        "delta_freeze_start": {
+            "sharp": [
+                "Delta active. Stay positive.",
+                "Delta. Don't go negative.",
+                "Delta freeze. Watch the number.",
+            ],
+            "professional": [
+                "Delta active. Keep it positive.",
+                "Delta. Stay in the window.",
+                "Delta freeze. Watch your gap.",
+            ],
+            "supportive": [
+                "Delta active. You've got this.",
+                "Delta freeze. Stay right there.",
+                "Delta. Stay in the window.",
+            ],
+            "partnership": [
+                "Delta active. Like we always do.",
+                "Delta. We're right here with you.",
+                "Delta. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # DELTA FREEZE END
+        # ---------------------------------------------------------
+        "delta_freeze_end": {
+            "sharp": [
+                "Delta ending. Back to racing.",
+                "Delta free. Go.",
+                "Delta ending. Resume racing.",
+            ],
+            "professional": [
+                "Delta ending. Back to racing.",
+                "Delta free. Resume racing pace.",
+                "Delta ending. Back to it.",
+            ],
+            "supportive": [
+                "Delta ending. Back to racing.",
+                "Delta free. Like we always do.",
+            ],
+            "partnership": [
+                "Delta ending. Like we always do.",
+                "Delta free. Back to racing.",
+                "Delta. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # PIT WINDOW OPEN
+        # ---------------------------------------------------------
+        "pit_window_open": {
+            "sharp": [
+                "Box this lap. Confirm.",
+                "Pit window open. Box this lap.",
+                "We're pitting this lap. Confirm.",
+            ],
+            "professional": [
+                "Box this lap. Confirm if you're ready.",
+                "Pit window is open. Box this lap.",
+                "Stop this lap. Confirm.",
+            ],
+            "supportive": [
+                "Box this lap. Confirm when you're ready.",
+                "Pit window open. Time to box.",
+                "Box this lap. We need to know.",
+            ],
+            "partnership": [
+                "Box this lap. Confirm.",
+                "Pit window. Let's go. Confirm when you're ready.",
+                "Box this lap. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # PIT WINDOW SECTOR 3
+        # ---------------------------------------------------------
+        "pit_window_sector3": {
+            "sharp": [
+                "Box this lap. Still time. Confirm.",
+                "Pit reminder. Box this lap or stay out.",
+                "Sector 3. Box or extend. Confirm.",
+            ],
+            "professional": [
+                "Reminder. Box this lap. Confirm.",
+                "Pit reminder. Confirm your call.",
+                "Sector 3. Box or extend.",
+            ],
+            "supportive": [
+                "Reminder. Box this lap. Confirm when you're ready.",
+                "Pit window. We need to know. Confirm or extend.",
+                "Box this lap. Let me know.",
+            ],
+            "partnership": [
+                "Box this lap. Confirm when you're ready.",
+                "Pit reminder. Let me know.",
+                "Box this lap. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # PIT LIMITER REMINDER
+        # ---------------------------------------------------------
+        "pit_limiter_reminder": {
+            "sharp": [
+                "Pit limiter. Mind the speed.",
+                "Pit limiter on. Don't overspeed.",
+                "Speed. Pit limiter.",
+            ],
+            "professional": [
+                "Pit limiter. Watch the speed limit.",
+                "Pit limiter. Don't overspeed.",
+                "Pit limiter. Speed.",
+            ],
+            "supportive": [
+                "Pit limiter. Slow down.",
+                "Pit limiter. Watch your entry speed.",
+                "Pit limiter. Slow down.",
+            ],
+            "partnership": [
+                "Pit limiter. Slow down.",
+                "Pit limiter. Like we always do.",
+                "Pit limiter. Mind the speed.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # PIT STOP QUALITY — Good
+        # ---------------------------------------------------------
+        "pit_stop_quality_good": {
+            "sharp": [
+                "Good stop. Blend line.",
+            ],
+            "professional": [
+                "Good stop. Blend line. Watch the traffic.",
+                "Stop complete. Blend line.",
+            ],
+            "supportive": [
+                "Good stop. Blend line. You've got this.",
+            ],
+            "partnership": [
+                "Good stop. Blend line. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # PIT STOP QUALITY — Acceptable
+        # ---------------------------------------------------------
+        "pit_stop_quality_acceptable": {
+            "sharp": [
+                "Acceptable stop. Blend line.",
+            ],
+            "professional": [
+                "Acceptable stop. Watch the blend.",
+            ],
+            "supportive": [
+                "Acceptable stop. Watch the blend line.",
+            ],
+            "partnership": [
+                "Acceptable stop. Watch the blend line.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # PIT STOP QUALITY — Slow (same across tiers)
+        # ---------------------------------------------------------
+        "pit_stop_quality_slow": {
+            "sharp": [
+                "Slow stop. Blend line. Watch out.",
+            ],
+            "professional": [
+                "Slow stop. Blend line. Watch out.",
+            ],
+            "supportive": [
+                "Slow stop. Blend line. Watch out.",
+            ],
+            "partnership": [
+                "Slow stop. Blend line. Watch out.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # EXTEND STINT
+        # ---------------------------------------------------------
+        "extend_stint": {
+            "sharp": [
+                "Understood. Extending. Don't cook the tyres.",
+                "Staying out. One more lap if it's safe.",
+                "Extending. Don't push it.",
+            ],
+            "professional": [
+                "Extending the stint. Stay smooth.",
+                "Understood. Staying out. Manage the tyres.",
+                "Extending. Watch the degradation.",
+            ],
+            "supportive": [
+                "Extending. You've got the feel for it.",
+                "Staying out. One more lap if you can.",
+                "Extending. Trust your feel.",
+            ],
+            "partnership": [
+                "Extending. We've got this.",
+                "Staying out. Like we always do.",
+                "Extending. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # SAFETY OVERRIDE
+        # ---------------------------------------------------------
+        "safety_override": {
+            "sharp": [
+                "Box. Now. It's not safe.",
+                "Shawn. Box. Don't argue.",
+                "Box this lap. Safety issue. No debate.",
+            ],
+            "professional": [
+                "Box this lap. Safety priority.",
+                "We need to box. Now.",
+                "Safety concern. Box immediately.",
+            ],
+            "supportive": [
+                "Box this lap. We need to stop.",
+                "Box. I know it's not ideal but we have to.",
+                "Box this lap. We have to.",
+            ],
+            "partnership": [
+                "Box this lap. Trust me on this.",
+                "Box. We've got to stop.",
+                "Box. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # TEAMMATE PITTING
+        # ---------------------------------------------------------
+        "teammate_pitting": {
+            "sharp": [
+                "{first} is boxing this lap.",
+                "{first} pitting. Good luck out there.",
+                "{first} in the pit lane.",
+            ],
+            "professional": [
+                "{first} is boxing this lap.",
+                "{first} pitting.",
+                "{first} in the pit lane.",
+            ],
+            "supportive": [
+                "{first} is boxing. Good luck out there.",
+                "{first} pitting.",
+                "{first} in the pit lane.",
+            ],
+            "partnership": [
+                "{first} is boxing. We'll keep an eye out.",
+                "{first} pitting.",
+                "{first} in the pit lane.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # TEAMMATE DNF
+        # ---------------------------------------------------------
+        "teammate_dnf": {
+            "sharp": [
+                "{first} is out. You've got the team to yourself now.",
+                "{first} retired. Focus on your race.",
+                "{first} is out of the race.",
+            ],
+            "professional": [
+                "{first} is out of the race.",
+                "{first} DNF. Keep pushing.",
+                "{first} retired. Keep going.",
+            ],
+            "supportive": [
+                "{first} is out. Stay focused.",
+                "{first} retired. We've still got a race to run.",
+                "{first} is out. Keep going.",
+            ],
+            "partnership": [
+                "{first} is out. Let's make it count.",
+                "{first} DNF. We'll miss them out there.",
+                "{first} is out. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # QUALI GOAL
+        # ---------------------------------------------------------
+        "quali_goal": {
+            "sharp": [
+                "Qualifying lap. Give me everything.",
+                "This is it. Full push.",
+                "Quali lap. No lifting.",
+            ],
+            "professional": [
+                "Qualifying lap. Full push.",
+                "This is a qualifying lap. Everything.",
+                "Quali lap. Everything.",
+            ],
+            "supportive": [
+                "Qualifying lap. Trust yourself.",
+                "This is it. Give me everything you've got.",
+                "Quali lap. You've got this.",
+            ],
+            "partnership": [
+                "Qualifying lap. Like we always do.",
+                "This is it. Let's find the time together.",
+                "Qualifying lap. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # QUALI LAP COMPLETE VALID
+        # ---------------------------------------------------------
+        "quali_lap_complete": {
+            "sharp": [
+                "Lap complete. P{position}.",
+                "Good lap. P{position}.",
+                "Lap done. P{position}.",
+            ],
+            "professional": [
+                "Lap complete. P{position}.",
+                "Good lap. P{position}.",
+                "Lap done. P{position}.",
+            ],
+            "supportive": [
+                "Lap complete. That's a good lap, P{position}.",
+                "P{position}. Well driven.",
+                "Lap complete. P{position}. Well done.",
+            ],
+            "partnership": [
+                "Lap complete. P{position}. That's a great lap.",
+                "P{position}. We found the time.",
+                "Lap complete. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # QUALI LAP INVALID
+        # ---------------------------------------------------------
+        "quali_lap_invalid": {
+            "sharp": [
+                "Lap deleted. That won't count.",
+                "Deleted. Run it again.",
+                "Lap deleted. Not good enough. Go again.",
+            ],
+            "professional": [
+                "Lap deleted. That won't count.",
+                "Invalid lap. Try again.",
+                "Lap deleted. Run it again.",
+            ],
+            "supportive": [
+                "Lap deleted. Don't let it rattle you. Go again.",
+                "Lap deleted. Shake it off and go again.",
+                "Lap deleted. It happens. Try again.",
+            ],
+            "partnership": [
+                "Lap deleted. It happens. Go again.",
+                "Lap deleted. We've got time. Try again.",
+                "Lap deleted. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # QUALI PROVISIONAL POLE
+        # ---------------------------------------------------------
+        "quali_provisional_pole": {
+            "sharp": [
+                "Provisional pole. Good lap.",
+                "Provisional pole. Let's see if it holds.",
+            ],
+            "professional": [
+                "Provisional pole. Good effort.",
+                "Provisional pole.",
+                "Pole. Provisional. Good lap.",
+            ],
+            "supportive": [
+                "Provisional pole. That was a great lap.",
+                "Pole. Provisional. Well done.",
+                "Provisional pole. Let's see.",
+            ],
+            "partnership": [
+                "Provisional pole. That's what I expected.",
+                "Pole. Provisional. Like we always do.",
+                "Provisional pole. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # QUALI FINAL POLE
+        # ---------------------------------------------------------
+        "quali_final_pole": {
+            "sharp": [
+                "Pole position. Incredible.",
+                "Pole. You did it.",
+                "Pole position. Locked in.",
+            ],
+            "professional": [
+                "Pole position. That's the way to start.",
+                "Pole. Locked in.",
+                "Pole position. Incredible.",
+            ],
+            "supportive": [
+                "Pole position. That's a great lap to start from pole.",
+                "Pole. Incredible.",
+                "Pole position. Well done.",
+            ],
+            "partnership": [
+                "Pole position. Like we always knew you could.",
+                "Pole. Like we always do.",
+                "Pole position. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # QUALI POSITION LOST
+        # ---------------------------------------------------------
+        "quali_position_lost": {
+            "sharp": [
+                "Dropped to P{position}. Worth going again.",
+                "P{position}. Not good enough. Go again.",
+                "Position lost. P{position}. Try again.",
+            ],
+            "professional": [
+                "Position lost. P{position}. Try again.",
+                "P{position}. Worth going back out.",
+                "Dropped to P{position}. Try again.",
+            ],
+            "supportive": [
+                "P{position}. You've got time. Go again.",
+                "Dropped to P{position}. Not a disaster. Go again.",
+                "P{position}. Not the end. Try again.",
+            ],
+            "partnership": [
+                "P{position}. We can do better. Go again.",
+                "Dropped to P{position}. Let's find it.",
+                "P{position}. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # QUALI GO BACK OUT
+        # ---------------------------------------------------------
+        "quali_go_back_out": {
+            "sharp": [
+                "Not good enough. Go back out.",
+                "Back out. That wasn't your best.",
+                "Not good enough. Another shot.",
+            ],
+            "professional": [
+                "Go back out. That wasn't quite there.",
+                "Back out. Try again.",
+                "Go back out. One more.",
+            ],
+            "supportive": [
+                "Go back out. You've got time. One more shot.",
+                "Not quite. Go back out.",
+                "Go back out. You've got this.",
+            ],
+            "partnership": [
+                "Go back out. We'll find it.",
+                "Back out. One more lap.",
+                "Go back out. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # WEATHER CHANGED
+        # ---------------------------------------------------------
+        "weather_changed": {
+            "sharp": [
+                "Track conditions changing. Watch the grip.",
+                "Conditions shifting. Let me know what you feel.",
+            ],
+            "professional": [
+                "Track conditions changing. Monitor grip closely.",
+                "Weather shift. Keep me updated.",
+            ],
+            "supportive": [
+                "Conditions are changing. Trust your feel.",
+                "Conditions shifting. Stay focused on the grip.",
+            ],
+            "partnership": [
+                "Conditions shifting. We'll read it together.",
+                "Weather changing. Stay sharp.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # RAIN SOON
+        # ---------------------------------------------------------
+        "rain_soon": {
+            "sharp": [
+                "Rain in {n} minutes. Be ready.",
+                "{n} minutes to rain.",
+            ],
+            "professional": [
+                "Rain expected in about {n} minutes.",
+                "{n} minutes to rain. Stay alert.",
+            ],
+            "supportive": [
+                "Rain in about {n} minutes. Stay focused.",
+                "{n} minutes to rain.",
+            ],
+            "partnership": [
+                "Rain in about {n} minutes. We'll call it.",
+                "{n} minutes to rain. Stay sharp.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # TRACK DRYING
+        # ---------------------------------------------------------
+        "track_drying": {
+            "sharp": [
+                "Track drying. Inters may be the move soon.",
+                "Track drying. Slicks could be on soon.",
+            ],
+            "professional": [
+                "Track is drying. Inters may become viable.",
+                "Track drying. Keep an eye on conditions.",
+            ],
+            "supportive": [
+                "Track drying. The crossover is coming.",
+                "Conditions drying. Watch for the switch.",
+            ],
+            "partnership": [
+                "Track drying. We'll call the crossover.",
+                "Conditions drying. We'll read it together.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # TRACK WORSENING
+        # ---------------------------------------------------------
+        "track_worsening": {
+            "sharp": [
+                "Conditions worsening. Stay focused.",
+                "Getting worse out there.",
+            ],
+            "professional": [
+                "Conditions getting worse. Stay sharp.",
+                "Track worsening. Stay focused.",
+            ],
+            "supportive": [
+                "Conditions worsening. Keep pushing but watch it.",
+                "Conditions getting worse. Stay focused.",
+            ],
+            "partnership": [
+                "Conditions worsening. Stay sharp.",
+                "It's getting worse out there. Stay focused.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # CROSSOVER TO INTERS
+        # ---------------------------------------------------------
+        "crossover_inters": {
+            "sharp": [
+                "Track is too wet for slicks. Intermediates are the right tyre now.",
+                "Inters. Now. The track is too wet.",
+            ],
+            "professional": [
+                "Track too wet for slicks. Intermediates are the call.",
+                "Inters. The track is too wet.",
+            ],
+            "supportive": [
+                "Track is too wet. Inters are the right tyre now.",
+                "Inters. The track's too wet for slicks.",
+            ],
+            "partnership": [
+                "Track too wet. Inters. Like we always do.",
+                "Inters. We'll call it.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # CROSSOVER TO SLICKS
+        # ---------------------------------------------------------
+        "crossover_slicks": {
+            "sharp": [
+                "Conditions are dry. Inters are costing you time. Come in for slicks.",
+                "Dry track. Slicks. Now.",
+            ],
+            "professional": [
+                "Track is dry. Slicks are the call.",
+                "Conditions dry. Come in for slicks.",
+            ],
+            "supportive": [
+                "Track is dry. Slicks are the right tyre now.",
+                "Dry track. Slicks. Let's go.",
+            ],
+            "partnership": [
+                "Track dry. Slicks. Like we always do.",
+                "Slicks. We'll call it.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # CROSSOVER TO FULL WETS
+        # ---------------------------------------------------------
+        "crossover_wets": {
+            "sharp": [
+                "Conditions are extreme. Full wets are the right tyre now.",
+                "Full wets. The track is too wet.",
+            ],
+            "professional": [
+                "Track extreme. Full wets are the call.",
+                "Full wets. The track is too wet.",
+            ],
+            "supportive": [
+                "Conditions extreme. Full wets. Stay safe.",
+                "Full wets. The track is too wet.",
+            ],
+            "partnership": [
+                "Full wets. Like we always do.",
+                "Wets. We'll call it.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # LAST FIVE LAPS
+        # ---------------------------------------------------------
+        "last_five_laps": {
+            "sharp": [
+                "Five laps to go. {ahead} ahead, {gap}. {behind} behind, {behind_gap}.",
+                "Five laps. {ahead}: {gap}. {behind}: {behind_gap}.",
+                "Five laps. {gap} to {ahead}. {behind}: {behind_gap} behind.",
+                "Five laps to go. Keep it tidy.",
+            ],
+            "professional": [
+                "Five laps to go. {ahead} ahead, {gap}. {behind} behind, {behind_gap}.",
+                "Five laps. Gap to {ahead}: {gap}. {behind}: {behind_gap} behind.",
+                "Five laps to go. {gap} to {ahead}. {behind}: {behind_gap} behind.",
+                "Five laps to go. Keep it clean.",
+            ],
+            "supportive": [
+                "Five laps to go. {ahead} ahead, {gap}. {behind} behind, {behind_gap}. Looking good.",
+                "Five laps. Gap to {ahead}: {gap}. {behind}: {behind_gap} behind. Solid.",
+                "Five laps. {gap} to {ahead}. {behind}: {behind_gap} behind. Good.",
+                "Five laps to go. You've got this.",
+            ],
+            "partnership": [
+                "Five laps to go. {ahead} ahead, {gap}. {behind} behind, {behind_gap}. Like we always do.",
+                "Five laps. Gap to {ahead}: {gap}. {behind}: {behind_gap} behind.",
+                "Five laps. {gap} to {ahead}. {behind}: {behind_gap} behind.",
+                "Five laps to go. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # LAST LAP
+        # ---------------------------------------------------------
+        "last_lap": {
+            "sharp": [
+                "Last lap. {ahead} ahead, {gap}. {behind} behind, {behind_gap}.",
+                "Last lap. {gap} to {ahead}. {behind}: {behind_gap} behind.",
+                "Last lap. Bring it home.",
+                "Last lap. No risks.",
+            ],
+            "professional": [
+                "Last lap. {ahead} ahead, {gap}. {behind} behind, {behind_gap}.",
+                "Last lap. Gap to {ahead}: {gap}. {behind}: {behind_gap} behind.",
+                "Last lap. Bring it home.",
+                "Last lap. Keep it clean.",
+            ],
+            "supportive": [
+                "Last lap. {ahead} ahead, {gap}. {behind} behind, {behind_gap}. You've done this.",
+                "Last lap. Gap to {ahead}: {gap}. {behind}: {behind_gap} behind. Stay clean.",
+                "Last lap. Like we always do.",
+                "Last lap. Bring it home. You've done this.",
+            ],
+            "partnership": [
+                "Last lap. {ahead} ahead, {gap}. {behind} behind, {behind_gap}. Like we always do.",
+                "Last lap. Gap to {ahead}: {gap}. {behind}: {behind_gap} behind. Together.",
+                "Last lap. Like we always do. Bring it home.",
+                "Last lap. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # LAP INVALIDATED
+        # ---------------------------------------------------------
+        "lap_invalidated": {
+            "sharp": [
+                "Lap deleted. That won't count.",
+                "Deleted. Run it again.",
+                "Lap deleted. Not good enough. Go again.",
+            ],
+            "professional": [
+                "Lap deleted. That won't count.",
+                "Invalid lap. Try again.",
+                "Lap deleted. Run it again.",
+            ],
+            "supportive": [
+                "Lap deleted. Don't let it rattle you. Go again.",
+                "Lap deleted. Shake it off and go again.",
+                "Lap deleted. It happens. Try again.",
+            ],
+            "partnership": [
+                "Lap deleted. It happens. Go again.",
+                "Lap deleted. We've got time. Try again.",
+                "Lap deleted. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # SESSION START
+        # ---------------------------------------------------------
+        "session_start": {
+            "sharp": [
+                "Session starting. Focus.",
+                "Session live. Let's go.",
+                "Session starting.",
+            ],
+            "professional": [
+                "Session starting. Focus.",
+                "Session live.",
+                "Session starting.",
+            ],
+            "supportive": [
+                "Session starting. You've got this.",
+                "Session live. Let's find the time.",
+                "Session starting. Let's go.",
+            ],
+            "partnership": [
+                "Session starting. Like we always do.",
+                "Session live. Let's go.",
+                "Session starting. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # SESSION END
+        # ---------------------------------------------------------
+        "session_end": {
+            "sharp": [
+                "Session complete.",
+                "Session over. Good work.",
+                "Session complete. Good work.",
+            ],
+            "professional": [
+                "Session complete.",
+                "Session over.",
+                "Session complete. Good work.",
+            ],
+            "supportive": [
+                "Session complete. Good effort.",
+                "Session over. Well done.",
+                "Session complete. Well done.",
+            ],
+            "partnership": [
+                "Session complete. Like we always do.",
+                "Session over. Good work.",
+                "Session complete. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # SESSION TYPE CHANGED
+        # ---------------------------------------------------------
+        "session_type_changed": {
+            "sharp": [
+                "Qualifying. Let's go.",
+                "Race start. Focus.",
+                "Practice. Track time.",
+            ],
+            "professional": [
+                "Qualifying starting. Let's go.",
+                "Race mode. Focus.",
+                "Practice session.",
+            ],
+            "supportive": [
+                "Qualifying. This is what matters.",
+                "Race. Let's do it.",
+                "Practice. Track time.",
+            ],
+            "partnership": [
+                "Qualifying. Like we always do.",
+                "Race. Let's go.",
+                "Practice. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # GARAGE ENTERED
+        # ---------------------------------------------------------
+        "garage_entered": {
+            "sharp": [
+                "In the garage.",
+                "Back in the garage. Take your time.",
+                "In the garage. No rush.",
+            ],
+            "professional": [
+                "In the garage.",
+                "Returned to the garage.",
+                "In the garage. No rush.",
+            ],
+            "supportive": [
+                "In the garage. No rush.",
+                "Back in the garage. Well done out there.",
+                "In the garage. Take your time.",
+            ],
+            "partnership": [
+                "In the garage. Like we always do.",
+                "Back in the garage. Good work.",
+                "In the garage. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # GARAGE EXITED
+        # ---------------------------------------------------------
+        "garage_exited": {
+            "sharp": [
+                "Out of the garage. Back on track.",
+                "Out. Let's go.",
+                "Out of the garage. Let's go.",
+            ],
+            "professional": [
+                "Out of the garage. Back on track.",
+                "Back on track.",
+                "Out of the garage. Let's go.",
+            ],
+            "supportive": [
+                "Out of the garage. Back on it.",
+                "Back on track. Let's go.",
+                "Out of the garage. Let's go.",
+            ],
+            "partnership": [
+                "Out of the garage. Like we always do.",
+                "Back on track. Let's go.",
+                "Out of the garage. Like we always do.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # LAP START
+        # ---------------------------------------------------------
+        "lap_start": {
+            "sharp": [
+                "Lap {lap}. Push.",
+                "Lap {lap}. Go.",
+                "Lap {lap}. Find the limit.",
+            ],
+            "professional": [
+                "Lap {lap}. Push.",
+                "Lap {lap}. Let's go.",
+                "Lap {lap}. Find the pace.",
+            ],
+            "supportive": [
+                "Lap {lap}. Good start.",
+                "Lap {lap}. Let's do this.",
+                "Lap {lap}. You've got this.",
+            ],
+            "partnership": [
+                "Lap {lap}. Good start.",
+                "Lap {lap}. Let's find the pace together.",
+                "Lap {lap}. We've got this.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # QUALI POSITION UPDATE
+        # ---------------------------------------------------------
+        "quali_position_update": {
+            "sharp": [
+                "P{position}.",
+                "P{position}. That's where we are.",
+                "P{position}. Current.",
+            ],
+            "professional": [
+                "P{position}.",
+                "P{position}. Current.",
+                "P{position}. Holding.",
+            ],
+            "supportive": [
+                "P{position}. Looking good.",
+                "P{position}. Solid.",
+                "P{position}. Nice.",
+            ],
+            "partnership": [
+                "P{position}. Looking good.",
+                "P{position}. Solid.",
+                "P{position}. Nice work.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # QUALI LAP COMPLETE VALID
+        # ---------------------------------------------------------
+        "quali_lap_complete_valid": {
+            "sharp": [
+                "Lap done. P{position}.",
+                "P{position}. Done.",
+                "Lap complete. P{position}.",
+            ],
+            "professional": [
+                "Lap done. P{position}.",
+                "P{position}. Lap complete.",
+                "Lap complete. P{position}.",
+            ],
+            "supportive": [
+                "Lap done. P{position}. Good.",
+                "P{position}. Nice lap.",
+                "Lap complete. P{position}. Solid.",
+            ],
+            "partnership": [
+                "Lap done. P{position}. Nice work.",
+                "P{position}. Good lap.",
+                "Lap complete. P{position}. Well driven.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # PIT LIMITER ON
+        # ---------------------------------------------------------
+        "pit_limiter_on": {
+            "sharp": [
+                "Pit limiter.",
+                "Pit limiter on.",
+            ],
+            "professional": [
+                "Pit limiter on.",
+                "Pit limiter.",
+            ],
+            "supportive": [
+                "Pit limiter on.",
+                "Pit limiter.",
+            ],
+            "partnership": [
+                "Pit limiter on.",
+                "Pit limiter.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # PIT LIMITER OFF
+        # ---------------------------------------------------------
+        "pit_limiter_off": {
+            "sharp": [
+                "Pit limiter off.",
+                "Pit limiter disengaged.",
+            ],
+            "professional": [
+                "Pit limiter off.",
+                "Pit limiter disengaged.",
+            ],
+            "supportive": [
+                "Pit limiter off.",
+                "Pit limiter disengaged.",
+            ],
+            "partnership": [
+                "Pit limiter off.",
+                "Pit limiter disengaged.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # TRACK GREEN FLAG
+        # ---------------------------------------------------------
+        "track_green": {
+            "sharp": [
+                "Track is green.",
+                "Green flag.",
+                "Green. Push.",
+            ],
+            "professional": [
+                "Green flag. Push.",
+                "Track is green.",
+                "Green. Let's go.",
+            ],
+            "supportive": [
+                "Green flag. Push.",
+                "Green. Go for it.",
+                "Track is green. Let's go.",
+            ],
+            "partnership": [
+                "Green flag. Let's go.",
+                "Green. Push.",
+                "Track is green. We've got this.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # TRACK YELLOW FLAG
+        # ---------------------------------------------------------
+        "track_yellow": {
+            "sharp": [
+                "Yellow flag. Slow down.",
+                "Yellow. Caution.",
+                "Yellow flag. Be careful.",
+            ],
+            "professional": [
+                "Yellow flag. Slow down.",
+                "Yellow. Caution.",
+                "Yellow flag. Caution.",
+            ],
+            "supportive": [
+                "Yellow flag. Caution.",
+                "Yellow. Slow down.",
+                "Yellow flag. Be careful.",
+            ],
+            "partnership": [
+                "Yellow flag. Caution.",
+                "Yellow. Slow down.",
+                "Yellow flag. Be careful.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # TRACK DOUBLE YELLOW
+        # ---------------------------------------------------------
+        "track_double_yellow": {
+            "sharp": [
+                "Double yellow. Slow down significantly.",
+                "Double yellow. Very slow.",
+                "Double yellow. Be very careful.",
+            ],
+            "professional": [
+                "Double yellow. Slow down significantly.",
+                "Double yellow. Very slow.",
+                "Double yellow. Full caution.",
+            ],
+            "supportive": [
+                "Double yellow. Be careful.",
+                "Double yellow. Slow right down.",
+                "Double yellow. Full caution.",
+            ],
+            "partnership": [
+                "Double yellow. Slow down.",
+                "Double yellow. Be careful.",
+                "Double yellow. Full caution.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # PIT ENTRY
+        # ---------------------------------------------------------
+        "pit_entry": {
+            "sharp": [
+                "Pitting.",
+                "Boxing.",
+                "Pitting this lap.",
+            ],
+            "professional": [
+                "Pitting.",
+                "Boxing this lap.",
+                "Pitting this lap.",
+            ],
+            "supportive": [
+                "Pitting.",
+                "Boxing this lap.",
+                "Pitting this lap.",
+            ],
+            "partnership": [
+                "Pitting.",
+                "Boxing this lap.",
+                "Pitting this lap.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # PIT EXIT
+        # ---------------------------------------------------------
+        "pit_exit": {
+            "sharp": [
+                "Out of the box.",
+                "Out.",
+                "Back on track.",
+            ],
+            "professional": [
+                "Out of the box.",
+                "Back on track.",
+                "Out.",
+            ],
+            "supportive": [
+                "Out of the box.",
+                "Back on track.",
+                "Out. Let's go.",
+            ],
+            "partnership": [
+                "Out of the box.",
+                "Back on track.",
+                "Out. Let's go.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # PIT ENTRY LINE
+        # ---------------------------------------------------------
+        "pit_entry_line": {
+            "sharp": [
+                "Pit entry.",
+                "Approaching pit entry.",
+            ],
+            "professional": [
+                "Pit entry.",
+                "Approaching pit entry.",
+            ],
+            "supportive": [
+                "Pit entry.",
+                "Approaching pit entry.",
+            ],
+            "partnership": [
+                "Pit entry.",
+                "Approaching pit entry.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # PIT EXIT LINE
+        # ---------------------------------------------------------
+        "pit_exit_line": {
+            "sharp": [
+                "Pit exit.",
+                "Pit exit coming up.",
+            ],
+            "professional": [
+                "Pit exit.",
+                "Pit exit coming up.",
+            ],
+            "supportive": [
+                "Pit exit.",
+                "Pit exit coming up.",
+            ],
+            "partnership": [
+                "Pit exit.",
+                "Pit exit coming up.",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # FORECAST WEATHER CHANGE
+        # ---------------------------------------------------------
+        "forecast_weather_change": {
+            "sharp": [
+                "Weather shift incoming.",
+                "Conditions changing.",
+                "Weather change coming.",
+            ],
+            "professional": [
+                "Weather shift incoming.",
+                "Conditions changing. Stay aware.",
+                "Weather change coming.",
+            ],
+            "supportive": [
+                "Weather shift incoming. Stay aware.",
+                "Conditions changing.",
+                "Weather change coming.",
+            ],
+            "partnership": [
+                "Weather shift incoming. Stay aware.",
+                "Conditions changing.",
+                "Weather change coming.",
+            ],
+        },
+    }
+
+    # =========================================================
     # PUBLIC API
-    # ---------------------------------------------------------
+    # =========================================================
 
     @staticmethod
     def objective_start(career: CareerTracker, description: str, obj_type: str) -> str:
@@ -536,3 +2255,29 @@ class RadioLines:
     def year_10(career: CareerTracker) -> str:
         line = random.choice(RadioLines._year_10)
         return RadioLines._format(line, career)
+
+    # =========================================================
+    # RACE EVENT LINE LOOKUP
+    # =========================================================
+
+    @staticmethod
+    def get(event: str, career: CareerTracker, **kwargs) -> str:
+        """
+        Get a radio line for a race event, selected by warmth tier.
+        kwargs are injected into the line template.
+        """
+        tier = career.warmth_tier
+
+        # Race gap has position-dependent sub-tiers
+        if event == "race_gap":
+            position = kwargs.get("position", 99)
+            sub_tier = f"{tier}_p1_p5" if position <= 5 else f"{tier}_p6_plus"
+            lines = RadioLines._race_events.get(event, {}).get(sub_tier, [])
+        else:
+            lines = RadioLines._race_events.get(event, {}).get(tier, [])
+
+        if not lines:
+            return ""
+
+        line = random.choice(lines)
+        return RadioLines._format(line, career, **kwargs)

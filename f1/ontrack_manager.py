@@ -13,7 +13,6 @@ class OnTrackManager:
     - out lap / flying lap / in lap
     - invalid lap
     - yellow flags
-    - delta freeze (SC/VSC)
     Emits events to TelemetryState → EventRouter → EngineerBrain.
     """
 
@@ -26,8 +25,6 @@ class OnTrackManager:
         self.last_pit_mode = 0
         self.last_lap_invalid = False
         self.last_yellow_flag = 0
-        self.last_delta_freeze = False
-        self.last_lap_number = -1
 
     # ---------------------------------------------------------
     # Internal helper
@@ -59,7 +56,7 @@ class OnTrackManager:
         # -----------------------------------------------------
         # PIT LIMITER (VOICE ONLY)
         # -----------------------------------------------------
-        pit_limiter = bool(status.m_pitLimiterOn)
+        pit_limiter = bool(status.m_pitLimiterStatus == 1)
 
         if pit_limiter and not self.last_pit_limiter:
             # purely for radio lines
@@ -83,14 +80,6 @@ class OnTrackManager:
             self._emit(EventType.PIT_EXIT)
 
         # -----------------------------------------------------
-        # LAP START
-        # -----------------------------------------------------
-        lap_number = lap_data.m_currentLapNum
-
-        if lap_number != self.last_lap_number:
-            self._emit(EventType.LAP_START, lap=lap_number)
-
-        # -----------------------------------------------------
         # INVALID LAP
         # -----------------------------------------------------
         invalid = bool(lap_data.m_currentLapInvalid)
@@ -112,17 +101,6 @@ class OnTrackManager:
                 self._emit(EventType.TRACK_DOUBLE_YELLOW)
 
         # -----------------------------------------------------
-        # DELTA FREEZE (SC/VSC)
-        # -----------------------------------------------------
-        delta_freeze = bool(getattr(session, "m_isDeltaPositive", False))
-
-        if delta_freeze and not self.last_delta_freeze:
-            self._emit(EventType.DELTA_FREEZE_START)
-
-        if not delta_freeze and self.last_delta_freeze:
-            self._emit(EventType.DELTA_FREEZE_END)
-
-        # -----------------------------------------------------
         # Update cached values
         # -----------------------------------------------------
         self.last_on_track = on_track
@@ -130,5 +108,3 @@ class OnTrackManager:
         self.last_pit_mode = pit_mode
         self.last_lap_invalid = invalid
         self.last_yellow_flag = yellow_flag
-        self.last_delta_freeze = delta_freeze
-        self.last_lap_number = lap_number

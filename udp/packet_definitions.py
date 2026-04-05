@@ -1966,7 +1966,7 @@ def decode_packet(data: bytes) -> Optional[object]:
         return None
 
     try:
-        packet_id = PacketID(data[HEADER_SIZE - 2])
+        packet_id = PacketID(data[6])  # offset 6 = m_packetId in header
         decoder = PACKET_DECODERS.get(packet_id)
         if decoder:
             return decoder(data)

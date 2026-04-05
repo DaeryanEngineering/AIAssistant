@@ -53,6 +53,9 @@ class AudioVideoManager:
     # =========================================================
 
     def play_animation(self, name: str, *, loop: bool = True) -> None:
+        if self._current_animation == name:
+            return
+
         path = AssetMap.get_animation(name)
         self._current_animation = name
 
@@ -120,6 +123,18 @@ class AudioVideoManager:
         # Queue audio for playback (from memory, not from file)
         self._audio_queue.put((audio, sr, True))  # True = return to idle after
 
+    def clear_queue(self):
+        """
+        Clear pending audio items from the queue.
+        Called by TTSEngine for priority events.
+        """
+        while not self._audio_queue.empty():
+            try:
+                self._audio_queue.get_nowait()
+                self._audio_queue.task_done()
+            except queue.Empty:
+                break
+
     # =========================================================
     # AUDIO THREAD WORKER
     # =========================================================
@@ -145,10 +160,16 @@ class AudioVideoManager:
     # =========================================================
 
     def on_talk_start(self):
-        self.play_animation("SaulTalk.mp4", loop=True)
+        # Modes handle their own animation transitions.
+        # This hook is kept for future extensibility but does not
+        # override the mode's animation choice.
+        pass
 
     def on_talk_end(self):
-        self.play_animation("SaulIdle.mp4", loop=True)
+        # Modes handle their own animation transitions.
+        # This hook is kept for future extensibility but does not
+        # override the mode's animation choice.
+        pass
 
     # =========================================================
     # SHUTDOWN

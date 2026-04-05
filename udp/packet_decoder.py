@@ -40,3 +40,9 @@ class PacketDecoder:
         if len(data) < 28:
             return None
         return PacketHeader.from_bytes(data)
+
+    def get_packet_id(self, data: bytes) -> int | None:
+        """Extract packet ID from raw bytes without full decode."""
+        if len(data) < 7:
+            return None
+        return data[6]

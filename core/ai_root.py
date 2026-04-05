@@ -48,6 +48,9 @@ class AIRoot:
         # Objective system (deferred, set in saul_app.py)
         self.objective_manager = None
 
+        # ERSDRSManager (deferred, set in saul_app.py)
+        self.ers_drs_manager = None
+
 
     def set_mode(self, mode_class):
         if self.current_mode:
@@ -60,10 +63,12 @@ class AIRoot:
         name = mode_class.__name__
         if name == "AIMode":
             self.av_manager.set_visible(True)
-            self.av_manager.play_animation("aimode_idle", loop=True)
+            self.av_manager.set_state("listening")
+            self.av_manager.play_animation("aimode_listen", loop=True)
         elif name == "F1Mode":
             self.av_manager.set_visible(True)
-            self.av_manager.play_animation("f1mode_idle", loop=True)
+            self.av_manager.set_state("listening")
+            self.av_manager.play_animation("f1mode_listen", loop=True)
         elif name == "F1EngineerMode":
             self.av_manager.set_visible(False)
             self.av_manager.stop_animation()
@@ -96,4 +101,5 @@ class AIRoot:
                 self.av_manager,
                 self.tts_engine,
                 self.objective_manager,
+                self.ers_drs_manager,
             )

@@ -27,6 +27,7 @@ class QualifyingBehavior:
         self.last_lap_valid = True
         self.last_session_time_left = None
         self.last_in_garage = False
+        self.last_session_type = None
 
     # ---------------------------------------------------------
     # Internal helper
@@ -70,7 +71,8 @@ class QualifyingBehavior:
 
             if lap_valid:
                 self._emit(EventType.QUALI_LAP_COMPLETE_VALID,
-                           lap=self.last_lap_number)
+                           lap=self.last_lap_number,
+                           position=position)
             else:
                 self._emit(EventType.QUALI_LAP_COMPLETE_INVALID,
                            lap=self.last_lap_number)
@@ -121,6 +123,7 @@ class QualifyingBehavior:
         self.last_lap_number = lap_number
         self.last_position = position
         self.last_lap_valid = lap_valid
+        self.last_session_type = session.m_sessionType
         self.last_session_time_left = session.m_sessionTimeLeft
         self.last_in_garage = in_garage
 

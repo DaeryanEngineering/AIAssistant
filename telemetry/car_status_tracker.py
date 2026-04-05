@@ -9,7 +9,6 @@ class CarStatusTracker:
         self._last_drs_allowed = None
         self._last_ers_store = None
         self._last_flag = None
-        self._last_pit_limiter = None
 
     def on_packet(self, packet):
 
@@ -17,7 +16,7 @@ class CarStatusTracker:
         if not isinstance(packet, PacketCarStatusData):
             return
 
-        car = packet.car_status_data[self.state.player_index]
+        car = packet.m_carStatusData[self.state.player_index]
 
         # ------------------------------
         # DRS Allowed Change
@@ -45,14 +44,3 @@ class CarStatusTracker:
         if car.m_vehicleFiaFlags != self._last_flag:
             self._last_flag = car.m_vehicleFiaFlags
             print(f"[Tracker] FIA Flag changed to {car.m_vehicleFiaFlags}")
-
-        # ------------------------------
-        # Pit Limiter Change
-        # ------------------------------
-        if car.m_pitLimiterStatus != self._last_pit_limiter:
-            self._last_pit_limiter = car.m_pitLimiterStatus
-
-            if car.m_pitLimiterStatus == 1:
-                print("[Tracker] Pit limiter ON")
-            else:
-                print("[Tracker] Pit limiter OFF")

@@ -64,8 +64,8 @@ class VLCVideoPlayer:
             try:
                 self._player.set_fullscreen(False)
                 self._player.set_xwindow(0)  # Linux fallback
-            except:
-                pass
+            except Exception as e:
+                print(f"[VLC] Could not hide window: {e}")
             print("[VLC] Window hidden (off-screen hack)")
 
     # ---------------------------------------------------------
