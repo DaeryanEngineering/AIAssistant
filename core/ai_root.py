@@ -3,7 +3,8 @@
 from .context import Context
 from .input_manager import InputManager
 from .audio_video_manager import AudioVideoManager
-from .tts_engine import TTSEngine
+from .tts_cache import TTSCache
+from .llm_client import LLMClient
 from .tone_engine import ToneEngine
 from .mood_engine import MoodEngine
 from .response_brain import ResponseBrain
@@ -22,14 +23,19 @@ class AIRoot:
     def __init__(self):
         self.context = Context()
         self.current_mode = None
+        self.career = None
 
         # Shared managers / engines
         self.input_manager = InputManager()
         self.av_manager = AudioVideoManager()
-        self.tts_engine = TTSEngine(self.av_manager)
+        self.llm_client = LLMClient("llama3.2:1b")
+        self.llm_client.prewarm()
+        self.tts_engine = TTSCache(self.av_manager)
         self.tone_engine = ToneEngine()
         self.mood_engine = MoodEngine()
-        self.response_brain = ResponseBrain(self.tone_engine, self.mood_engine)
+        self.response_brain = ResponseBrain(
+            self.llm_client, self.tone_engine, self.mood_engine
+        )
         self.intent_parser = IntentParser()
 
         # Text input UI
@@ -77,9 +83,7 @@ class AIRoot:
     def update(self):
         self.context.update()
 
-        # ---------------------------------------------------------
         # Pause Manager update BEFORE mode update
-        # ---------------------------------------------------------
         if self.pause_manager:
             self.pause_manager.update(
                 current_mode=self.current_mode.__class__.__name__
@@ -89,10 +93,7 @@ class AIRoot:
             if self.objective_manager:
                 self.objective_manager.update()
 
-
-        # ---------------------------------------------------------
         # Mode update
-        # ---------------------------------------------------------
         if self.current_mode:
             self.current_mode.update(
                 self.input_manager,
@@ -102,4 +103,5 @@ class AIRoot:
                 self.tts_engine,
                 self.objective_manager,
                 self.ers_drs_manager,
+                career=self.career,
             )

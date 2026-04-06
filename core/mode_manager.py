@@ -137,6 +137,8 @@ class ModeManager:
     # ---------------------------------------------------------
     def _set_mode(self, new_mode):
         if new_mode != self.current_mode:
+            old = self.current_mode
             self.current_mode = new_mode
+            print(f"[Mode] {old.name} -> {new_mode.name}")
             if self.on_mode_change:
                 self.on_mode_change(new_mode)

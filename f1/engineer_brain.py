@@ -22,12 +22,11 @@ class EngineerBrain:
     def _say(self, event_name: str, priority: bool = False, **kwargs):
         line = RadioLines.get(event_name, self.career, **kwargs)
         if line:
-            self.tts_engine.speak_async(
+            self.tts_engine.speak(
                 line,
                 priority=priority,
                 radio=True,
                 play_beep=True,
-                voice_profile="saul_radio"
             )
 
     # ---------------------------------------------------------
@@ -103,26 +102,26 @@ class EngineerBrain:
 
     def handle_strategy_update(self, component: str | None = None, value: int | None = None, **_):
         if component:
-            self.tts_engine.speak_async(
+            self.tts_engine.speak(
                 f"We're adjusting your strategy because of {component} damage.",
-                radio=True, play_beep=True, voice_profile="saul_radio"
+                radio=True, play_beep=True,
             )
         else:
-            self.tts_engine.speak_async(
+            self.tts_engine.speak(
                 "We're changing your strategy because of the damage.",
-                radio=True, play_beep=True, voice_profile="saul_radio"
+                radio=True, play_beep=True,
             )
 
     def handle_out_lap(self, **_):
-        self.tts_engine.speak_async(
+        self.tts_engine.speak(
             "Out lap. Build the temperature and check the balance.",
-            radio=True, play_beep=True, voice_profile="saul_radio"
+            radio=True, play_beep=True,
         )
 
     def handle_in_lap(self, **_):
-        self.tts_engine.speak_async(
+        self.tts_engine.speak(
             "In lap. Box this lap. Mind the delta on entry.",
-            radio=True, play_beep=True, voice_profile="saul_radio"
+            radio=True, play_beep=True,
         )
 
     # ---------------------------------------------------------
@@ -181,14 +180,14 @@ class EngineerBrain:
 
     def handle_quali_target(self, target_position: int | None = None, **_):
         if target_position is not None:
-            self.tts_engine.speak_async(
+            self.tts_engine.speak(
                 f"We need at least P{target_position} to make the cutoff.",
-                radio=True, play_beep=True, voice_profile="saul_radio"
+                radio=True, play_beep=True,
             )
         else:
-            self.tts_engine.speak_async(
+            self.tts_engine.speak(
                 "We need a better lap to make the cutoff.",
-                radio=True, play_beep=True, voice_profile="saul_radio"
+                radio=True, play_beep=True,
             )
 
     # ---------------------------------------------------------
@@ -199,19 +198,19 @@ class EngineerBrain:
                               trend: str | None = None,
                               **_):
         if minutes is not None and intensity:
-            self.tts_engine.speak_async(
+            self.tts_engine.speak(
                 f"{intensity.capitalize()} rain expected in about {minutes} minutes.",
-                radio=True, play_beep=True, voice_profile="saul_radio"
+                radio=True, play_beep=True
             )
         elif minutes is not None:
-            self.tts_engine.speak_async(
+            self.tts_engine.speak(
                 f"Weather change expected in about {minutes} minutes.",
-                radio=True, play_beep=True, voice_profile="saul_radio"
+                radio=True, play_beep=True
             )
         else:
-            self.tts_engine.speak_async(
+            self.tts_engine.speak(
                 "Track conditions are changing. Keep me updated on the grip.",
-                radio=True, play_beep=True, voice_profile="saul_radio"
+                radio=True, play_beep=True
             )
 
     def handle_weather_changed(self, **_):
@@ -268,12 +267,7 @@ class EngineerBrain:
             return
 
         line = " ".join(gap_parts)
-        self.tts_engine.speak_async(
-            line,
-            radio=True,
-            play_beep=True,
-            voice_profile="saul_radio"
-        )
+        self.tts_engine.speak(line, radio=True, play_beep=True)
 
     # ---------------------------------------------------------
     # Last 5 laps / Last lap
@@ -287,15 +281,15 @@ class EngineerBrain:
                               win_on_the_line: bool = False,
                               **_):
         if win_on_the_line:
-            self.tts_engine.speak_async(
+            self.tts_engine.speak(
                 "Five laps to go. This is for the win.",
-                radio=True, play_beep=True, voice_profile="saul_radio"
+                radio=True, play_beep=True
             )
             return
         if podium_on_the_line:
-            self.tts_engine.speak_async(
+            self.tts_engine.speak(
                 "Five laps to go. This is for the podium.",
-                radio=True, play_beep=True, voice_profile="saul_radio"
+                radio=True, play_beep=True
             )
             return
 
@@ -317,27 +311,27 @@ class EngineerBrain:
                         attacking: bool = False,
                         **_):
         if win_on_the_line:
-            self.tts_engine.speak_async(
+            self.tts_engine.speak(
                 "Last lap. This is for the win. Bring it home.",
-                radio=True, play_beep=True, voice_profile="saul_radio"
+                radio=True, play_beep=True
             )
             return
         if podium_on_the_line:
-            self.tts_engine.speak_async(
+            self.tts_engine.speak(
                 "Last lap. This is for the podium. Keep it clean.",
-                radio=True, play_beep=True, voice_profile="saul_radio"
+                radio=True, play_beep=True
             )
             return
         if under_threat and behind_gap and behind_name:
-            self.tts_engine.speak_async(
+            self.tts_engine.speak(
                 f"Last lap. {RadioLines.format_gap(behind_gap)} to {behind_name} behind. Defend the position.",
-                radio=True, play_beep=True, voice_profile="saul_radio"
+                radio=True, play_beep=True
             )
             return
         if attacking and ahead_gap and ahead_name:
-            self.tts_engine.speak_async(
+            self.tts_engine.speak(
                 f"Last lap. {RadioLines.format_gap(ahead_gap)} to {ahead_name} ahead. Push to the line.",
-                radio=True, play_beep=True, voice_profile="saul_radio"
+                radio=True, play_beep=True
             )
             return
 

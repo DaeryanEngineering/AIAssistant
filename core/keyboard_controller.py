@@ -170,3 +170,11 @@ class KeyboardController:
     @property
     def current_ers_mode(self):
         return self._current_ers_mode
+
+    def stop_ers(self):
+        """
+        Cycle ERS to None (mode 0) by pressing F11 repeatedly.
+        """
+        with self._lock:
+            while self._current_ers_mode != 0:
+                self._press(self.KEYS["ers_cycle_left"])

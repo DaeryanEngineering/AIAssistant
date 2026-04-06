@@ -1,4 +1,5 @@
 # saul_app.py
+import os
 from core.ai_root import AIRoot
 from core.ai_mode import AIMode
 from core.f1_mode import F1Mode
@@ -7,8 +8,8 @@ from core.mode_manager import ModeManager, SaulMode
 from core.pause_manager import PauseManager
 from core.career_tracker import CareerTracker
 from core.keyboard_controller import KeyboardController
-from core.keyboard_listener import KeyboardListener
 from core.event_router import EventRouter
+from core.radio_lines import RadioLines
 from f1.engineer_brain import EngineerBrain
 from f1.ers_drs_manager import ERSDRSManager
 from core.objective_manager import ObjectiveManager
@@ -27,6 +28,16 @@ def main():
     # --- Career Tracker ---
     career = CareerTracker()
     print(f"[Career] Year {career.career_year}, {career.series}, Warmth {career.warmth}")
+    saul.career = career
+
+    # --- TTS cache: all static lines pre-cached on disk, instant load each startup ---
+    static_lines = RadioLines.get_all_static()
+    f1_mode_lines = RadioLines.get_all_f1_mode()
+    all_lines = static_lines + f1_mode_lines
+    uncached = [t for t in all_lines
+                if not os.path.exists(saul.tts_engine._cached_path(t))]
+    print(f"[TTS] {len(all_lines)} total lines ({len(uncached)} need caching)")
+    saul.tts_engine.preload(all_lines)
 
     # --- Telemetry Manager (UDP polling + F1 state managers) ---
     telemetry_manager = TelemetryManager()
@@ -65,8 +76,10 @@ def main():
     )
 
     # --- Keyboard Listener (Insert key for pit confirmation) ---
-    keyboard_listener = KeyboardListener(on_insert=ers_drs_manager.confirm_pit)
-    keyboard_listener.start()
+    # NOTE: keyboard package doesn't catch Steam Input keys.
+    # Use "confirm" text command instead when in Engineer Mode pause menu.
+    # keyboard_listener = KeyboardListener(on_insert=ers_drs_manager.confirm_pit)
+    # keyboard_listener.start()
 
     # Start ERS/DRS thread (50ms loop)
     ers_drs_manager.start_thread()

@@ -1,5 +1,6 @@
 # core/radio_lines.py
 
+import re
 import random
 from .career_tracker import CareerTracker
 
@@ -2257,6 +2258,357 @@ class RadioLines:
         return RadioLines._format(line, career)
 
     # =========================================================
+    # F1 MODE: R&D RESPONSES (48 lines: 12 combos × 4 warmth tiers)
+    # =========================================================
+    # Format: {teammate_category}_{chosen_category}_{tier}
+    # Teammate on Aero → pick Powertrain/Chassis/Durability
+    # Teammate on Powertrain → pick Aero/Chassis/Durability
+    # Teammate on Chassis → pick Aero/Powertrain/Durability
+    # Teammate on Durability → pick Aero/Powertrain/Chassis
+
+    _f1_rnd = {
+        # Teammate on Aero → choose Powertrain/Chassis/Durability
+        "Aero_Powertrain": {
+            "sharp": [
+                "Aero's taken. Let's dig into Powertrain then.",
+                "Aero's their deal. Powertrain it is.",
+                "Not Aero. Powertrain.",
+            ],
+            "professional": [
+                "Aero's taken. Powertrain it is.",
+                "Powertrain. Let's see what we can find.",
+                "Aero's not ours. Powertrain.",
+            ],
+            "supportive": [
+                "Aero's Oscar's to deal with. Let's work on Powertrain.",
+                "Powertrain looks good for us. Let's see what's there.",
+                "Not chasing Aero. Powertrain it is.",
+            ],
+            "partnership": [
+                "Aero's their focus. We'll take Powertrain. Let's dig in together.",
+                "Powertrain — that's our path. Let's see what we can build.",
+                "Aero's not our lane. Powertrain. We'll find something there.",
+            ],
+        },
+        "Aero_Chassis": {
+            "sharp": [
+                "Aero's taken. Chassis.",
+                "Not Aero. Chassis it is.",
+                "Aero's their job. Chassis for us.",
+            ],
+            "professional": [
+                "Aero's taken. Chassis is ours.",
+                "Chassis. Let's see what we can do.",
+                "Aero's not ours. Chassis.",
+            ],
+            "supportive": [
+                "Aero's Oscar's to worry about. Let's take Chassis.",
+                "Chassis looks promising. Let's work it.",
+                "Not chasing Aero. Chassis is our move.",
+            ],
+            "partnership": [
+                "Aero's their focus. We'll take Chassis. Let's build something there.",
+                "Chassis — that's our angle. Let's see what we find.",
+                "Aero's not our lane. Chassis. We'll make it work.",
+            ],
+        },
+        "Aero_Durability": {
+            "sharp": [
+                "Aero's taken. Durability.",
+                "Not Aero. Durability.",
+                "Aero's their deal. Durability for us.",
+            ],
+            "professional": [
+                "Aero's taken. Durability it is.",
+                "Durability. Let's see what's there.",
+                "Aero's not ours. Durability.",
+            ],
+            "supportive": [
+                "Aero's Oscar's to worry about. Let's work on Durability.",
+                "Durability looks worth a look.",
+                "Not chasing Aero. Durability it is.",
+            ],
+            "partnership": [
+                "Aero's their focus. We'll take Durability. Let's dig in.",
+                "Durability — good call. Let's see what we can find.",
+                "Aero's not our lane. Durability. We'll make it work.",
+            ],
+        },
+        # Teammate on Powertrain → choose Aero/Chassis/Durability
+        "Powertrain_Aero": {
+            "sharp": [
+                "Powertrain's taken. Aero.",
+                "Not Powertrain. Aero.",
+                "Powertrain's their job. Aero for us.",
+            ],
+            "professional": [
+                "Powertrain's taken. Aero it is.",
+                "Aero. Let's see what we can do.",
+                "Powertrain's not ours. Aero.",
+            ],
+            "supportive": [
+                "Powertrain's Oscar's to deal with. Let's take Aero.",
+                "Aero looks worth exploring.",
+                "Not chasing Powertrain. Aero is our move.",
+            ],
+            "partnership": [
+                "Powertrain's their focus. We'll take Aero. Let's see what we find.",
+                "Aero — good angle. Let's build something.",
+                "Powertrain's not our lane. Aero. We'll make it work.",
+            ],
+        },
+        "Powertrain_Chassis": {
+            "sharp": [
+                "Powertrain's taken. Chassis.",
+                "Not Powertrain. Chassis it is.",
+                "Powertrain's their deal. Chassis for us.",
+            ],
+            "professional": [
+                "Powertrain's taken. Chassis is ours.",
+                "Chassis. Let's work it.",
+                "Powertrain's not ours. Chassis.",
+            ],
+            "supportive": [
+                "Powertrain's Oscar's to worry about. Let's take Chassis.",
+                "Chassis looks promising. Let's dig in.",
+                "Not chasing Powertrain. Chassis is our move.",
+            ],
+            "partnership": [
+                "Powertrain's their focus. We'll take Chassis. Let's build there.",
+                "Chassis — good call. Let's see what we can find.",
+                "Powertrain's not our lane. Chassis. We'll make it work.",
+            ],
+        },
+        "Powertrain_Durability": {
+            "sharp": [
+                "Powertrain's taken. Durability.",
+                "Not Powertrain. Durability.",
+                "Powertrain's their job. Durability for us.",
+            ],
+            "professional": [
+                "Powertrain's taken. Durability it is.",
+                "Durability. Let's see what's there.",
+                "Powertrain's not ours. Durability.",
+            ],
+            "supportive": [
+                "Powertrain's Oscar's to worry about. Let's work on Durability.",
+                "Durability looks worth a look.",
+                "Not chasing Powertrain. Durability it is.",
+            ],
+            "partnership": [
+                "Powertrain's their focus. We'll take Durability. Let's dig in.",
+                "Durability — good angle. Let's see what we find.",
+                "Powertrain's not our lane. Durability. We'll make it work.",
+            ],
+        },
+        # Teammate on Chassis → choose Aero/Powertrain/Durability
+        "Chassis_Aero": {
+            "sharp": [
+                "Chassis' taken. Aero.",
+                "Not Chassis. Aero.",
+                "Chassis' their deal. Aero for us.",
+            ],
+            "professional": [
+                "Chassis' taken. Aero it is.",
+                "Aero. Let's see what we can do.",
+                "Chassis' not ours. Aero.",
+            ],
+            "supportive": [
+                "Chassis' Oscar's to deal with. Let's take Aero.",
+                "Aero looks worth exploring.",
+                "Not chasing Chassis. Aero is our move.",
+            ],
+            "partnership": [
+                "Chassis' their focus. We'll take Aero. Let's see what we find.",
+                "Aero — good angle. Let's build something.",
+                "Chassis' not our lane. Aero. We'll make it work.",
+            ],
+        },
+        "Chassis_Powertrain": {
+            "sharp": [
+                "Chassis' taken. Powertrain.",
+                "Not Chassis. Powertrain it is.",
+                "Chassis' their deal. Powertrain for us.",
+            ],
+            "professional": [
+                "Chassis' taken. Powertrain is ours.",
+                "Powertrain. Let's work it.",
+                "Chassis' not ours. Powertrain.",
+            ],
+            "supportive": [
+                "Chassis' Oscar's to worry about. Let's take Powertrain.",
+                "Powertrain looks promising. Let's dig in.",
+                "Not chasing Chassis. Powertrain is our move.",
+            ],
+            "partnership": [
+                "Chassis' their focus. We'll take Powertrain. Let's build there.",
+                "Powertrain — good call. Let's see what we can find.",
+                "Chassis' not our lane. Powertrain. We'll make it work.",
+            ],
+        },
+        "Chassis_Durability": {
+            "sharp": [
+                "Chassis' taken. Durability.",
+                "Not Chassis. Durability.",
+                "Chassis' their deal. Durability for us.",
+            ],
+            "professional": [
+                "Chassis' taken. Durability it is.",
+                "Durability. Let's see what's there.",
+                "Chassis' not ours. Durability.",
+            ],
+            "supportive": [
+                "Chassis' Oscar's to worry about. Let's work on Durability.",
+                "Durability looks worth a look.",
+                "Not chasing Chassis. Durability it is.",
+            ],
+            "partnership": [
+                "Chassis' their focus. We'll take Durability. Let's dig in.",
+                "Durability — good angle. Let's see what we find.",
+                "Chassis' not our lane. Durability. We'll make it work.",
+            ],
+        },
+        # Teammate on Durability → choose Aero/Powertrain/Chassis
+        "Durability_Aero": {
+            "sharp": [
+                "Durability's taken. Aero.",
+                "Not Durability. Aero.",
+                "Durability's their job. Aero for us.",
+            ],
+            "professional": [
+                "Durability's taken. Aero it is.",
+                "Aero. Let's see what we can do.",
+                "Durability's not ours. Aero.",
+            ],
+            "supportive": [
+                "Durability's Oscar's to deal with. Let's take Aero.",
+                "Aero looks worth exploring.",
+                "Not chasing Durability. Aero is our move.",
+            ],
+            "partnership": [
+                "Durability's their focus. We'll take Aero. Let's see what we find.",
+                "Aero — good angle. Let's build something.",
+                "Durability's not our lane. Aero. We'll make it work.",
+            ],
+        },
+        "Durability_Powertrain": {
+            "sharp": [
+                "Durability's taken. Powertrain.",
+                "Not Durability. Powertrain it is.",
+                "Durability's their job. Powertrain for us.",
+            ],
+            "professional": [
+                "Durability's taken. Powertrain is ours.",
+                "Powertrain. Let's work it.",
+                "Durability's not ours. Powertrain.",
+            ],
+            "supportive": [
+                "Durability's Oscar's to worry about. Let's take Powertrain.",
+                "Powertrain looks promising. Let's dig in.",
+                "Not chasing Durability. Powertrain is our move.",
+            ],
+            "partnership": [
+                "Durability's their focus. We'll take Powertrain. Let's build there.",
+                "Powertrain — good call. Let's see what we can find.",
+                "Durability's not our lane. Powertrain. We'll make it work.",
+            ],
+        },
+        "Durability_Chassis": {
+            "sharp": [
+                "Durability's taken. Chassis.",
+                "Not Durability. Chassis it is.",
+                "Durability's their job. Chassis for us.",
+            ],
+            "professional": [
+                "Durability's taken. Chassis is ours.",
+                "Chassis. Let's work it.",
+                "Durability's not ours. Chassis.",
+            ],
+            "supportive": [
+                "Durability's Oscar's to worry about. Let's take Chassis.",
+                "Chassis looks promising. Let's dig in.",
+                "Not chasing Durability. Chassis is our move.",
+            ],
+            "partnership": [
+                "Durability's their focus. We'll take Chassis. Let's build there.",
+                "Chassis — good call. Let's see what we can find.",
+                "Durability's not our lane. Chassis. We'll make it work.",
+            ],
+        },
+    }
+
+    # =========================================================
+    # F1 MODE: PRACTICE PROGRAM ACKNOWLEDGMENTS (24 lines)
+    # =========================================================
+
+    _f1_practice = {
+        "Track Acclimatisation": {
+            "sharp": ["Track acclimatisation. Let's get the laps in."],
+            "professional": ["Track acclimatisation. Let's get the laps in."],
+            "supportive": ["Track acclimatisation. Let's get the laps in and find the limits."],
+            "partnership": ["Track acclimatisation. Let's get the laps in together and find the limits."],
+        },
+        "Tyre Management": {
+            "sharp": ["Tyre management. Let's find the window."],
+            "professional": ["Tyre management. Let's find the window."],
+            "supportive": ["Tyre management. Let's work the tyres and find the window."],
+            "partnership": ["Tyre management. Let's find the window together."],
+        },
+        "Fuel Management": {
+            "sharp": ["Fuel management. Let's find the balance."],
+            "professional": ["Fuel management. Let's find the balance."],
+            "supportive": ["Fuel management. Let's find the balance."],
+            "partnership": ["Fuel management. Let's find the balance together."],
+        },
+        "ERS Management": {
+            "sharp": ["ERS off."],
+            "professional": ["ERS off."],
+            "supportive": ["ERS management. Let's see how you get on without the extra push."],
+            "partnership": ["ERS management. Let's work on that feel together."],
+        },
+        "Qualifying Simulation": {
+            "sharp": ["Quali sim. Full push from the out-lap."],
+            "professional": ["Qualifying simulation. Full push from the out-lap."],
+            "supportive": ["Qualifying simulation. Let's find that lap together."],
+            "partnership": ["Qualifying simulation. Let's find that lap together."],
+        },
+        "Race Strategy": {
+            "sharp": ["Race strategy. Let's find the pace."],
+            "professional": ["Race strategy. Let's find the pace."],
+            "supportive": ["Race strategy. Let's find the pace and build the long run."],
+            "partnership": ["Race strategy. Let's build this together."],
+        },
+    }
+
+    _f1_practice_invalid = {
+        "sharp": ["Which program?"],
+        "professional": ["Which program?"],
+        "supportive": ["Which program?"],
+        "partnership": ["Which program?"],
+    }
+
+    # =========================================================
+    # F1 MODE: PUBLIC API
+    # =========================================================
+
+    @staticmethod
+    def get_f1_rnd(teammate_category: str, chosen_category: str, tier: str) -> str:
+        pool = RadioLines._f1_rnd.get(f"{teammate_category}_{chosen_category}", {})
+        lines = pool.get(tier, pool.get("professional", []))
+        return random.choice(lines) if lines else f"Let's work on {chosen_category}."
+
+    @staticmethod
+    def get_f1_practice(program: str, tier: str) -> str:
+        pool = RadioLines._f1_practice.get(program, {})
+        lines = pool.get(tier, pool.get("professional", []))
+        return random.choice(lines) if lines else "Alright. Let's get after it."
+
+    @staticmethod
+    def get_f1_practice_invalid(tier: str) -> str:
+        lines = RadioLines._f1_practice_invalid.get(tier, ["Which program?"])
+        return random.choice(lines)
+
+    # =========================================================
     # RACE EVENT LINE LOOKUP
     # =========================================================
 
@@ -2281,3 +2633,52 @@ class RadioLines:
 
         line = random.choice(lines)
         return RadioLines._format(line, career, **kwargs)
+
+    @staticmethod
+    def get_all_static() -> list[str]:
+        """
+        Return all unique static radio lines for pre-synthesis.
+        Strips {name} and {driver} placeholders (name injection happens at audio level).
+        Excludes lines with other dynamic kwargs (description, position, etc.).
+        """
+        lines = set()
+        safe_placeholders = {"{name}", "{driver}"}
+
+        for pool_name, pool_data in RadioLines._race_events.items():
+            for tier_lines in pool_data.values():
+                for line in tier_lines:
+                    found = set(re.findall(r'\{[^}]+\}', line))
+                    dynamic = found - safe_placeholders
+                    if dynamic:
+                        continue  # skip lines with dynamic placeholders
+
+                    # Strip safe placeholders
+                    result = line
+                    for ph in found:
+                        result = result.replace(ph, "")
+                    result = result.strip()
+                    if result:
+                        lines.add(result)
+
+        return sorted(lines)
+
+    @staticmethod
+    def get_all_f1_mode() -> list[str]:
+        """Return all F1Mode static lines for pre-synthesis."""
+        lines = set()
+
+        # _f1_rnd and _f1_practice: {category: {tier: [lines]}}
+        for pool in [RadioLines._f1_rnd, RadioLines._f1_practice]:
+            for tier_dict in pool.values():
+                for line_list in tier_dict.values():
+                    for line in line_list:
+                        if line:
+                            lines.add(line)
+
+        # _f1_practice_invalid: {tier: [lines]}
+        for tier_lines in RadioLines._f1_practice_invalid.values():
+            for line in tier_lines:
+                if line:
+                    lines.add(line)
+
+        return sorted(lines)

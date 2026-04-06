@@ -70,6 +70,9 @@ class ERSDRSManager:
         self._pending_pit_call = None
         self._pending_tire_compound = None
 
+        # ERS automation pause (for ERS Management practice)
+        self._ers_automation_paused = False
+
         # Timing
         self._last_drs_press = 0
         self._last_ers_press = 0
@@ -85,17 +88,30 @@ class ERSDRSManager:
         self._on_pit_confirm = callback
 
     def confirm_pit(self):
-        """Called when user presses Insert to confirm pit stop."""
-        if self._pending_pit_call:
-            self._pit_confirmed = True
-            self.engineer._say(f"Confirmed. {self._pending_pit_call}")
+        """
+        Confirm the pending pit stop. Called by Insert key or 'confirm' text command.
+        Returns the confirmation text if confirmed, None if nothing to confirm.
+        """
+        if not self._pending_pit_call:
+            return None
+        self._pit_confirmed = True
+        confirmation = f"Confirmed. {self._pending_pit_call}"
 
-            # If weather tire change needed, navigate MFD
-            if self._pending_tire_compound is not None:
-                self._navigate_mfd_for_tire(self._pending_tire_compound)
+        # If weather tire change needed, navigate MFD
+        if self._pending_tire_compound is not None:
+            self._navigate_mfd_for_tire(self._pending_tire_compound)
 
-            self._pending_pit_call = None
-            self._pending_tire_compound = None
+        self._pending_pit_call = None
+        self._pending_tire_compound = None
+        return confirmation
+
+    def stop_ers_automation(self):
+        """Pause ERS automation (called when entering ERS Management practice)."""
+        self._ers_automation_paused = True
+
+    def resume_ers_automation(self):
+        """Resume ERS automation (called when leaving ERS Management practice)."""
+        self._ers_automation_paused = False
 
     def start_thread(self):
         def _run_loop():
@@ -157,6 +173,9 @@ class ERSDRSManager:
 
     def _handle_ers(self):
         """Context-aware ERS deployment."""
+        if self._ers_automation_paused:
+            return
+
         status = self.telemetry.car_status
         telemetry = self.telemetry.car_telemetry
         session = self.telemetry.session

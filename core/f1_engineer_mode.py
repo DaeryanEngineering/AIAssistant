@@ -18,7 +18,7 @@ class F1EngineerMode(F1Mode):
         print("[F1EngineerMode] Entered (on-track, radio-only)")
         self.waiting_for_user = False
 
-    def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine, objective_manager=None, ers_drs_manager=None):
+    def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine, objective_manager=None, ers_drs_manager=None, career=None):
         # Engineer mode is radio-only, hidden
         av_manager.set_visible(False)
 
@@ -79,19 +79,32 @@ class F1EngineerMode(F1Mode):
 
         # --- CONFIRMATION HANDLING ---
         if self.context.awaiting_confirmation:
-            # Waiting for PTT press
-            if input_manager.is_pressed():
-                av_manager.set_state("talking")
-
-                # Speak confirmation response (chunked)
-                self._speak_chunked(
-                    self.context.confirmation_response,
-                    tts_engine
-                )
-
-                av_manager.set_state("idle")
-                self.context.awaiting_confirmation = False
+            if input_manager.has_text():
+                text = input_manager.consume_text()
+                if text.strip().lower() == "confirm":
+                    av_manager.set_state("talking")
+                    self._speak_chunked(
+                        self.context.confirmation_response,
+                        tts_engine
+                    )
+                    av_manager.set_state("idle")
+                    self.context.awaiting_confirmation = False
+                    if self.context.pending_action:
+                        self.context.pending_action()
+                    return
             return
+
+        # --- PIT CONFIRMATION via "confirm" text command ---
+        if ers_drs_manager:
+            if input_manager.has_text():
+                text = input_manager.consume_text()
+                if text.strip().lower() == "confirm":
+                    confirmation = ers_drs_manager.confirm_pit()
+                    if confirmation:
+                        av_manager.set_state("talking")
+                        tts_engine.speak(confirmation, radio=True, play_beep=True)
+                        av_manager.set_state("idle")
+                    return
 
         # --- PROACTIVE ENGINEER LINES ---
         engineer_line = self.context.get_engineer_line()
@@ -124,7 +137,6 @@ class F1EngineerMode(F1Mode):
                 chunk,
                 radio=True,
                 play_beep=True,
-                voice_profile="saul_main"
             )
 
             # Idle between chunks (Option A)

@@ -35,7 +35,9 @@ class AssetMap:
     # -------------------------
     voices = {
         # Profile Reference
+        "default":     "assets/voices/saul.wav",
         "saul_main":   "assets/voices/saul.wav",
+        "saul_radio":  "assets/voices/saul.wav",
 
         # Output file for XTTS synthesis (saved every utterance)
         "saul_output": "assets/voices/saul_output.wav",

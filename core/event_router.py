@@ -126,8 +126,8 @@ class EventRouter:
             EventType.STRATEGY_UPDATE_FROM_GAME: self.engineer_brain.handle_strategy_update,
             EventType.SC_VSC_STRATEGY_RECOMMENDATION: self.engineer_brain.handle_sc_vsc_pit_recommendation,
             # Qualifying
-            EventType.START_FLYING_LAP: self.engineer_brain.handle_quali_push_start,
-            EventType.FLYING_LAP_COMPLETED: self.engineer_brain.handle_quali_lap_end,
+            EventType.START_FLYING_LAP: self.engineer_brain.handle_quali_lap_start,
+            EventType.FLYING_LAP_COMPLETED: self.engineer_brain.handle_quali_lap_complete,
             EventType.POSITION_LOST_IN_QUALI: self.engineer_brain.handle_quali_position_loss,
             EventType.SESSION_TARGET_KNOWN: self.engineer_brain.handle_quali_target,
             EventType.QUALI_PROVISIONAL_POLE: self.engineer_brain.handle_quali_provisional_pole,
