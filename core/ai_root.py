@@ -104,4 +104,5 @@ class AIRoot:
                 self.objective_manager,
                 self.ers_drs_manager,
                 career=self.career,
+                telemetry_state=self.telemetry_state,
             )

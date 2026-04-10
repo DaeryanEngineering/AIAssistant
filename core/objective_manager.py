@@ -47,6 +47,7 @@ class ObjectiveManager:
         self._frozen = False
         self._year_5_acknowledged = False
         self._year_10_acknowledged = False
+        self._no_pit_stop = False  # Disable pit calls for session
 
     # ---------------------------------------------------------
     # PUBLIC API

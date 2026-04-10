@@ -138,9 +138,7 @@ class ERSDRSManager:
 
     def update(self, career=None):
         """Called every telemetry tick."""
-        # Skip entirely for F2 (no ERS/DRS)
-        if career and career.series == "F2":
-            return
+        is_f2 = career and career.series == "F2"
 
         # Get telemetry data for ERS/DRS calculations
         status = self.telemetry.car_status
@@ -227,9 +225,17 @@ class ERSDRSManager:
             except Exception:
                 pass
 
+        # DRS - always run (F2 has DRS)
         self._handle_drs()
-        self._handle_ers(recommended_ers, battery_pct, current_mode)
-        self._handle_pit_window()
+
+        # ERS - skip for F2 (no ERS in F2)
+        if not is_f2:
+            self._handle_ers(recommended_ers, battery_pct, current_mode)
+
+        # Pit window - check no_pit_stop flag
+        if not getattr(self.telemetry, '_no_pit_stop', False):
+            self._handle_pit_window()
+
         self._handle_weather_updates()
         self._handle_last_lap()
 

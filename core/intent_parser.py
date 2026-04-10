@@ -28,6 +28,11 @@ class IntentParser:
             if champ:
                 return champ
 
+            # Race commands (formation, launch, sprint, pit)
+            race = self._parse_race_commands(text_lower)
+            if race:
+                return race
+
             return self._parse_objective(text_lower)
 
         return Command(
@@ -117,6 +122,51 @@ class IntentParser:
                 return Command(
                     intent="set_series",
                     parameters={"series": series},
+                    confidence=0.9
+                )
+
+        return None
+
+    # ---------------------------------------------------------
+    # RACE COMMANDS
+    # ---------------------------------------------------------
+
+    def _parse_race_commands(self, text: str) -> Optional[Command]:
+        # Formation lap
+        formation_triggers = [
+            "formation lap", "formation", "warm tyres", "warm brakes",
+            "warm the tyres", "warm the brakes",
+        ]
+        for trigger in formation_triggers:
+            if trigger in text:
+                return Command(
+                    intent="formation_lap",
+                    parameters={},
+                    confidence=0.9
+                )
+
+        # Race start / launch
+        launch_triggers = [
+            "launch", "race start", "lights out", "go time", "let s go",
+        ]
+        for trigger in launch_triggers:
+            if trigger in text:
+                return Command(
+                    intent="launch",
+                    parameters={},
+                    confidence=0.9
+                )
+
+        # Sprint race (no pit stop)
+        sprint_triggers = [
+            "sprint race", "sprint", "no pit stop", "no pitting",
+            "no pits", "don't pit", "won't pit",
+        ]
+        for trigger in sprint_triggers:
+            if trigger in text:
+                return Command(
+                    intent="no_pit_stop",
+                    parameters={},
                     confidence=0.9
                 )
 

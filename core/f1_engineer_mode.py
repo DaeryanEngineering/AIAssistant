@@ -17,7 +17,8 @@ class F1EngineerMode(F1Mode):
     def on_enter(self):
         self.waiting_for_user = False
 
-    def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine, objective_manager=None, ers_drs_manager=None, career=None):
+    def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine, 
+               objective_manager=None, ers_drs_manager=None, career=None, telemetry_state=None):
         # Engineer mode is radio-only, hidden
         av_manager.set_visible(False)
 
@@ -50,6 +51,25 @@ class F1EngineerMode(F1Mode):
                 if intent.intent == "set_series":
                     if objective_manager.career:
                         objective_manager.career.set_series(intent.parameters.get("series", "F1"))
+                    return
+
+                # Race commands
+                if intent.intent == "formation_lap":
+                    from core.events import EventType
+                    telemetry_state._emit(EventType.FORMATION_LAP_START)
+                    return
+
+                if intent.intent == "launch":
+                    from core.events import EventType
+                    telemetry_state._emit(EventType.RACE_START_GRID)
+                    return
+
+                if intent.intent == "no_pit_stop":
+                    # Disable pit calls for this session
+                    telemetry_state._no_pit_stop = True
+                    av_manager.set_state("talking")
+                    tts_engine.speak("No pit stop, understood.", radio=True, play_beep=True)
+                    av_manager.set_state("idle")
                     return
 
                 # Objective commands

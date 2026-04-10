@@ -83,11 +83,13 @@ class RaceBehavior:
         # -----------------------------------------------------
         # PIT WINDOW OPEN
         # -----------------------------------------------------
-        if (not self.pit_window_open_announced and
-                lap_number >= session.m_pitStopWindowIdealLap):
-            print(f"[RACE] PIT_WINDOW_OPEN lap={lap_number} ideal={session.m_pitStopWindowIdealLap}")
-            self._emit(EventType.PIT_WINDOW_OPEN)
-            self.pit_window_open_announced = True
+        # Skip if no_pit_stop flag is set
+        if not getattr(self.telemetry_state, '_no_pit_stop', False):
+            if (not self.pit_window_open_announced and
+                    lap_number >= session.m_pitStopWindowIdealLap):
+                print(f"[RACE] PIT_WINDOW_OPEN lap={lap_number} ideal={session.m_pitStopWindowIdealLap}")
+                self._emit(EventType.PIT_WINDOW_OPEN)
+                self.pit_window_open_announced = True
 
         # -----------------------------------------------------
         # PIT WINDOW SECTOR 3 REMINDER
@@ -95,9 +97,11 @@ class RaceBehavior:
         if (self.pit_window_open_announced and
             not self.pit_window_sector3_announced and
             sector == 2):
-            print(f"[RACE] PIT_WINDOW_SECTOR3 lap={lap_number}")
-            self._emit(EventType.PIT_WINDOW_SECTOR3)
-            self.pit_window_sector3_announced = True
+            # Also skip if no_pit_stop
+            if not getattr(self.telemetry_state, '_no_pit_stop', False):
+                print(f"[RACE] PIT_WINDOW_SECTOR3 lap={lap_number}")
+                self._emit(EventType.PIT_WINDOW_SECTOR3)
+                self.pit_window_sector3_announced = True
 
         # -----------------------------------------------------
         # UNSAFE CONDITIONS (Safety Override)

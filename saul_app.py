@@ -214,16 +214,15 @@ class GapWorker:
 
         self._last_gap_lap = current_lap
 
-        player_idx = self.telemetry.get_player_index()
-        ahead_index  = self.telemetry.get_car_ahead_index()
-        behind_index = self.telemetry.get_car_behind_index()
+        # Use position-based approach (race position, not participant index)
+        player = self.telemetry.get_player()
+        ahead_lap = self.telemetry.get_car_ahead()
+        behind_lap = self.telemetry.get_car_behind()
 
-        print(f"[GAP] Checking: lap={current_lap}, player_idx={player_idx}, ahead_idx={ahead_index}, behind_idx={behind_index}")
+        ahead_id  = ahead_lap.m_driverId  if ahead_lap else None
+        behind_id = behind_lap.m_driverId if behind_lap else None
 
-        ahead_id  = self.telemetry.get_driver_id_by_index(ahead_index)  if ahead_index  is not None else None
-        behind_id = self.telemetry.get_driver_id_by_index(behind_index) if behind_index is not None else None
-
-        print(f"[GAP] Driver IDs: ahead_id={ahead_id}, behind_id={behind_id}")
+        print(f"[GAP] Checking: lap={current_lap}, ahead_id={ahead_id}, behind_id={behind_id}")
 
         gap_ahead = self._compute_gap_to_driver(ahead_id)
         gap_behind = self._compute_gap_to_driver(behind_id)

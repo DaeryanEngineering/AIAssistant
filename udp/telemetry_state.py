@@ -55,6 +55,7 @@ class TelemetryState:
 
         # Flags
         self._participants_ready = False
+        self._no_pit_stop = False  # Disable pit calls for session
 
         # Cached packets
         self.motion: Optional[PacketMotionData] = None
