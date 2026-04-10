@@ -1,5 +1,6 @@
 import time
 import threading
+import keyboard
 
 
 class KeyboardController:
@@ -30,6 +31,27 @@ class KeyboardController:
         self._lock = threading.Lock()
         self._pydirectinput = None
         self._initialized = False
+        self._confirm_callback = None
+
+        # Start keyboard listener thread for Insert key
+        threading.Thread(target=self._keyboard_listener, daemon=True).start()
+
+    def _keyboard_listener(self):
+        """Listen for Insert key for confirm."""
+        try:
+            # Use correct keyboard API
+            keyboard.on_press_key('insert', self._on_insert_key)
+        except Exception as e:
+            print(f"[Keyboard] Failed to register Insert key listener: {e}")
+
+    def _on_insert_key(self):
+        """Handle Insert key press."""
+        if self._confirm_callback:
+            self._confirm_callback()
+
+    def register_confirm_callback(self, callback):
+        """Register callback for Insert key press."""
+        self._confirm_callback = callback
 
     def _init(self):
         if not self._initialized:

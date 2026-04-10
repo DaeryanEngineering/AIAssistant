@@ -1848,6 +1848,58 @@ class RadioLines:
         },
 
         # ---------------------------------------------------------
+        # POSITION GAIN (overtake)
+        # ---------------------------------------------------------
+        "position_gain": {
+            "sharp": [
+                "Nice move, gained {positions}, now P{position}, ",
+                "Great overtake, up {positions}, now P{position}, ",
+                "Gained {positions}, P{position}, Well done, ",
+            ],
+            "professional": [
+                "Nice pass, gained {positions}, now P{position}, ",
+                "Good move, up {positions}, now P{position}, ",
+                "Gained {positions}, now P{position}, Good work, ",
+            ],
+            "supportive": [
+                "You got them, gained {positions}, now P{position}, ",
+                "Well done, gained {positions}, now P{position}, ",
+                "Gained {positions}, P{position}, You've got this, ",
+            ],
+            "partnership": [
+                "We did it, gained {positions}, now P{position}, ",
+                "Together we gained {positions}, now P{position}, ",
+                "Gained {positions}, P{position}, As a team, ",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # POSITION LOST (passed)
+        # ---------------------------------------------------------
+        "position_lost": {
+            "sharp": [
+                "Lost {positions}, now P{position}, ",
+                "Dropped back, lost {positions}, now P{position}, ",
+                "Passed, lost {positions}, now P{position}, ",
+            ],
+            "professional": [
+                "Lost {positions}, now P{position}, ",
+                "Dropped, lost {positions}, now P{position}, ",
+                "Passed, now P{position}, ",
+            ],
+            "supportive": [
+                "They got past, lost {positions}, now P{position}, ",
+                "Tough break, lost {positions}, now P{position}, ",
+                "Lost {positions}, now P{position}, We can fight back, ",
+            ],
+            "partnership": [
+                "We'll fight back, lost {positions}, now P{position}, ",
+                "Together we'll gain it back, lost {positions}, now P{position}, ",
+                "Lost {positions}, now P{position}, We're not done, ",
+            ],
+        },
+
+        # ---------------------------------------------------------
         # SESSION START
         # ---------------------------------------------------------
         "session_start": {
@@ -1892,6 +1944,32 @@ class RadioLines:
             "partnership": [
                 "Session ready, Together we got this, ",
                 "Ready to race, Let's go, ",
+            ],
+        },
+
+        # ---------------------------------------------------------
+        # SPRINT RACE ANNOUNCEMENT (no mandatory pit stop)
+        # ---------------------------------------------------------
+        "sprint_race_no_pit": {
+            "sharp": [
+                "Sprint race, No mandatory pit stop, Push from the start, ",
+                "Sprint race, No pit stop required, Go full send, ",
+                "Sprint race, No stops, Max attack, ",
+            ],
+            "professional": [
+                "Sprint race, No mandatory pit stop, Push from the start, ",
+                "Sprint race, No pit stop required, Full push, ",
+                "Sprint race, No stops, Maximum attack, ",
+            ],
+            "supportive": [
+                "Sprint race, No mandatory pit stop, You've got this, ",
+                "Sprint race, No pit stop, Give it everything, ",
+                "Sprint race, No stops, You've trained for this, ",
+            ],
+            "partnership": [
+                "Sprint race, No mandatory pit stop, Together we go full send, ",
+                "Sprint race, No stops, As a team we got this, ",
+                "Sprint race, No pit, Let's give it everything together, ",
             ],
         },
 

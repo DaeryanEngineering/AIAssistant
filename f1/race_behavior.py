@@ -30,6 +30,16 @@ class RaceBehavior:
         self.last_position = None
         self._finish_announced = False
 
+        # Position change tracking
+        self._last_position_announce_time = 0
+        self._position_cooldown = 3.0
+
+        # Safety override one-shot
+        self._safety_override_announced = False
+
+        # Pit status tracking (to reset safety override)
+        self._last_pit_status = None
+
     # ---------------------------------------------------------
     # Internal helper
     # ---------------------------------------------------------
@@ -76,15 +86,37 @@ class RaceBehavior:
                        position=lap_data.m_carPosition)
 
         # -----------------------------------------------------
+        # POSITION CHANGE DETECTION (overtakes)
+        # -----------------------------------------------------
+        current_position = lap_data.m_carPosition
+        if session.m_sessionType in (11, 15):  # Race or Sprint
+            if self.last_position is not None and current_position != self.last_position:
+                import time
+                now = time.time()
+                if now - self._last_position_announce_time >= self._position_cooldown:
+                    if current_position < self.last_position:  # Gained (lower = better)
+                        delta = self.last_position - current_position
+                        print(f"[RACE] POSITION_GAIN: +{delta} to P{current_position}")
+                        self._emit(EventType.POSITION_GAIN, position=current_position, positions=delta)
+                    else:  # Lost (higher = worse)
+                        delta = current_position - self.last_position
+                        print(f"[RACE] POSITION_LOST: -{delta} to P{current_position}")
+                        self._emit(EventType.POSITION_LOST, position=current_position, positions=delta)
+                    self._last_position_announce_time = now
+
+            self.last_position = current_position
+
+        # -----------------------------------------------------
         # SECTOR AWARENESS
         # -----------------------------------------------------
         sector = lap_data.m_sector  # 0,1,2
 
         # -----------------------------------------------------
-        # PIT WINDOW OPEN
+        # PIT WINDOW OPEN (only for feature races with mandatory pit stop)
         # -----------------------------------------------------
-        # Skip if no_pit_stop flag is set
-        if not getattr(self.telemetry_state, '_no_pit_stop', False):
+        # Skip if no_pit_stop flag is set OR if sprint race (no mandatory pit)
+        if (not getattr(self.telemetry_state, '_no_pit_stop', False) and 
+            self.telemetry_state.has_mandatory_pit_stop):
             if (not self.pit_window_open_announced and
                     lap_number >= session.m_pitStopWindowIdealLap):
                 print(f"[RACE] PIT_WINDOW_OPEN lap={lap_number} ideal={session.m_pitStopWindowIdealLap}")
@@ -92,19 +124,20 @@ class RaceBehavior:
                 self.pit_window_open_announced = True
 
         # -----------------------------------------------------
-        # PIT WINDOW SECTOR 3 REMINDER
+        # PIT WINDOW SECTOR 3 REMINDER (only for feature races)
         # -----------------------------------------------------
         if (self.pit_window_open_announced and
             not self.pit_window_sector3_announced and
             sector == 2):
-            # Also skip if no_pit_stop
-            if not getattr(self.telemetry_state, '_no_pit_stop', False):
+            # Also skip if no_pit_stop OR sprint
+            if (not getattr(self.telemetry_state, '_no_pit_stop', False) and 
+                self.telemetry_state.has_mandatory_pit_stop):
                 print(f"[RACE] PIT_WINDOW_SECTOR3 lap={lap_number}")
                 self._emit(EventType.PIT_WINDOW_SECTOR3)
                 self.pit_window_sector3_announced = True
 
         # -----------------------------------------------------
-        # UNSAFE CONDITIONS (Safety Override)
+        # UNSAFE CONDITIONS (Safety Override) - one-shot with reset
         # -----------------------------------------------------
         unsafe = False
 
@@ -125,9 +158,21 @@ class RaceBehavior:
         if session.m_trackTemperature > 65:
             unsafe = True
 
-        if unsafe:
+        # Check for pit (reset safety override flag when pitting)
+        current_pit_status = lap_data.m_pitStatus if lap_data else None
+        if current_pit_status == 1 and self._last_pit_status != 1:
+            # Player started pitting - reset safety override
+            self._safety_override_announced = False
+        self._last_pit_status = current_pit_status
+
+        # Also reset if no longer unsafe
+        if not unsafe and self._safety_override_announced:
+            self._safety_override_announced = False
+
+        if unsafe and not self._safety_override_announced:
             print("[RACE] SAFETY_OVERRIDE_REQUIRED (unsafe conditions)")
             self._emit(EventType.SAFETY_OVERRIDE_REQUIRED)
+            self._safety_override_announced = True
 
         # -----------------------------------------------------
         # RACE FINISH DETECTION

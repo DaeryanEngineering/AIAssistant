@@ -334,6 +334,12 @@ class EngineerBrain:
     def handle_race_win(self, **_):
         self._say("race_win", priority=True)
 
+    def handle_position_gain(self, positions: int | None = None, position: int | None = None, **_):
+        self._say("position_gain", positions=positions or 0, position=position or 0)
+
+    def handle_position_lost(self, positions: int | None = None, position: int | None = None, **_):
+        self._say("position_lost", positions=positions or 0, position=position or 0)
+
     def handle_constructors_title(self, position: int | None = None, team: str | None = None, **_):
         self._say("constructors_title", priority=True,
                   position=position or 0, team=team or "your team")
@@ -352,6 +358,9 @@ class EngineerBrain:
 
     def handle_session_ready(self, **_):
         self._say("session_ready")
+
+    def handle_sprint_announcement(self, **_):
+        self._say("sprint_race_no_pit")
 
     def handle_session_end(self, **_):
         self._say("session_end")

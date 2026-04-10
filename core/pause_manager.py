@@ -64,7 +64,7 @@ class PauseManager:
 
         # -------------------------
         # Engineer Mode (not paused)
-        # Text box visible (video stays off to save compute)
+        # Text box hidden (disabled - use Insert key for confirm)
         # -------------------------
         if current_mode == "F1EngineerMode" and not self.is_paused:
-            self.text_box.show_centered()
+            self.text_box.hide()

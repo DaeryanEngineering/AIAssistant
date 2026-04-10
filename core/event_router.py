@@ -46,6 +46,7 @@ EVENT_PRIORITIES = {
     EventType.DRIVERS_CHAMPIONSHIP_WON: PRIORITY_PIT,
     EventType.SESSION_START: PRIORITY_PIT,
     EventType.SESSION_READY: PRIORITY_PIT,
+    EventType.SPRINT_RACE_ANNOUNCED: PRIORITY_PIT,
     EventType.SESSION_END: PRIORITY_PIT,
     EventType.SESSION_TYPE_CHANGED: PRIORITY_PIT,
     EventType.PIT_ENTRY: PRIORITY_PIT,
@@ -68,6 +69,8 @@ EVENT_PRIORITIES = {
     EventType.TRACK_DOUBLE_YELLOW: PRIORITY_PIT,
     EventType.LAP_START: PRIORITY_PIT,
     EventType.PARTICIPANTS_READY: PRIORITY_PIT,
+    EventType.POSITION_GAIN: PRIORITY_PIT,
+    EventType.POSITION_LOST: PRIORITY_PIT,
     
     # Priority 2: Weather (stale skipping)
     EventType.WEATHER_UPDATE: PRIORITY_WEATHER,
@@ -238,6 +241,7 @@ class EventRouter:
             EventType.LAP_INVALIDATED: self.engineer_brain.handle_lap_invalidated,
             EventType.SESSION_START: self.engineer_brain.handle_session_start,
             EventType.SESSION_READY: self.engineer_brain.handle_session_ready,
+            EventType.SPRINT_RACE_ANNOUNCED: self.engineer_brain.handle_sprint_announcement,
             EventType.SESSION_END: self.engineer_brain.handle_session_end,
             EventType.SESSION_TYPE_CHANGED: self.engineer_brain.handle_session_type_changed,
             EventType.PARTICIPANTS_READY: self.engineer_brain.handle_participants_ready,
@@ -281,6 +285,8 @@ class EventRouter:
             EventType.RACE_GAP: self.engineer_brain.handle_gap_report,
             EventType.LAST_FIVE_LAPS: self.engineer_brain.handle_last_five_laps,
             EventType.LAST_LAP: self.engineer_brain.handle_last_lap,
+            EventType.POSITION_GAIN: self.engineer_brain.handle_position_gain,
+            EventType.POSITION_LOST: self.engineer_brain.handle_position_lost,
             
             # Teammate (handled via teammate_queue)
             EventType.TEAMMATE_PITTING: self.engineer_brain.handle_teammate_pit,

@@ -132,19 +132,6 @@ class IntentParser:
     # ---------------------------------------------------------
 
     def _parse_race_commands(self, text: str) -> Optional[Command]:
-        # Formation lap
-        formation_triggers = [
-            "formation lap", "formation", "warm tyres", "warm brakes",
-            "warm the tyres", "warm the brakes",
-        ]
-        for trigger in formation_triggers:
-            if trigger in text:
-                return Command(
-                    intent="formation_lap",
-                    parameters={},
-                    confidence=0.9
-                )
-
         # Race start / launch
         launch_triggers = [
             "launch", "race start", "lights out", "go time", "let s go",

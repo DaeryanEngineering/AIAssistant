@@ -54,11 +54,6 @@ class F1EngineerMode(F1Mode):
                     return
 
                 # Race commands
-                if intent.intent == "formation_lap":
-                    from core.events import EventType
-                    telemetry_state._emit(EventType.FORMATION_LAP_START)
-                    return
-
                 if intent.intent == "launch":
                     from core.events import EventType
                     telemetry_state._emit(EventType.RACE_START_GRID)

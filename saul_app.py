@@ -67,6 +67,22 @@ def main():
     # --- Keyboard Controller (DRS/ERS/MFD) ---
     keyboard_controller = KeyboardController()
 
+    # Wire Insert key to confirm handler
+    def on_confirm_key():
+        if saul.current_mode and hasattr(saul.current_mode, 'context'):
+            ctx = saul.current_mode.context
+            if ctx and ctx.awaiting_confirmation:
+                # Execute confirmation
+                if ctx.pending_action:
+                    ctx.pending_action()
+                if ctx.confirmation_response:
+                    saul.tts_engine.speak(ctx.confirmation_response, radio=True, play_beep=True)
+                ctx.awaiting_confirmation = False
+                ctx.confirmation_response = None
+                ctx.pending_action = None
+
+    keyboard_controller.register_confirm_callback(on_confirm_key)
+
     # --- ERSDRSManager ---
     ers_drs_manager = ERSDRSManager(
         telemetry_state=telemetry_manager.state,
@@ -219,8 +235,19 @@ class GapWorker:
         ahead_lap = self.telemetry.get_car_ahead()
         behind_lap = self.telemetry.get_car_behind()
 
-        ahead_id  = ahead_lap.m_driverId  if ahead_lap else None
-        behind_id = behind_lap.m_driverId if behind_lap else None
+        # Get driver ID from position using participants packet
+        ahead_id = None
+        behind_id = None
+        if ahead_lap:
+            try:
+                ahead_id = self.telemetry.get_driver_id_at_position(ahead_lap.m_carPosition)
+            except Exception:
+                pass
+        if behind_lap:
+            try:
+                behind_id = self.telemetry.get_driver_id_at_position(behind_lap.m_carPosition)
+            except Exception:
+                pass
 
         print(f"[GAP] Checking: lap={current_lap}, ahead_id={ahead_id}, behind_id={behind_id}")
 

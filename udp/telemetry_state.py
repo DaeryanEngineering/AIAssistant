@@ -223,6 +223,48 @@ class TelemetryState:
                 self.session.m_formationLap == 1)
 
     @property
+    def is_f2_feature(self) -> bool:
+        """F2 feature race - has mandatory pit stop."""
+        if not self.session:
+            return False
+        return (self.session.m_formula == 2 and 
+                self.session.m_sessionType == 10 and 
+                self.session.m_pitStopWindowIdealLap > 0)
+
+    @property
+    def is_f2_sprint(self) -> bool:
+        """F2 sprint race - no mandatory pit stop."""
+        if not self.session:
+            return False
+        return self.session.m_formula == 2 and self.session.m_sessionType == 15
+
+    @property
+    def is_f1_sprint(self) -> bool:
+        """F1 sprint race - no mandatory pit stop."""
+        if not self.session:
+            return False
+        return self.session.m_formula == 1 and self.session.m_sessionType == 11
+
+    @property
+    def is_f1_race(self) -> bool:
+        """F1 feature race - has mandatory pit stop."""
+        if not self.session:
+            return False
+        return (self.session.m_formula == 1 and 
+                self.session.m_sessionType == 10 and 
+                self.session.m_pitStopWindowIdealLap > 0)
+
+    @property
+    def is_sprint(self) -> bool:
+        """Any sprint race (F1 or F2)."""
+        return self.is_f1_sprint or self.is_f2_sprint
+
+    @property
+    def has_mandatory_pit_stop(self) -> bool:
+        """Feature race with mandatory pit stop."""
+        return self.is_f1_race or self.is_f2_feature
+
+    @property
     def driver_status(self) -> Optional[int]:
         if not self.lap_data:
             return None

@@ -8,7 +8,6 @@ class SessionManager:
     Detects session-level state transitions:
     - session start / end
     - session type changes (P → Q, Q → R)
-    - formation lap
     - safety car / VSC state transitions
     - garage entered / exited (inferred from driver_status)
     Emits events to TelemetryState → EventRouter → EngineerBrain.
@@ -23,12 +22,10 @@ class SessionManager:
         self.session_active = False
         self.grid_formed = False
         self.countdown_announced = False
-        self.formation_lap_announced = False
-        self.formation_sector3_announced = False
         self._last_driver_status = None
         self._in_garage = False
         self._session_ready_announced = False
-        self._last_sector = None
+        self._sprint_announced = False
 
     # ---------------------------------------------------------
     # Internal helper
@@ -65,6 +62,14 @@ class SessionManager:
             self._session_ready_announced = True
 
         # -----------------------------------------------------
+        # SPRINT RACE ANNOUNCEMENT (no mandatory pit stop)
+        # -----------------------------------------------------
+        if self.telemetry_state.is_sprint and not getattr(self, '_sprint_announced', False):
+            print("[SESSION] SPRINT_RACE_ANNOUNCED")
+            self._emit(EventType.SPRINT_RACE_ANNOUNCED)
+            self._sprint_announced = True
+
+        # -----------------------------------------------------
         # SESSION START
         # -----------------------------------------------------
         if not self.session_active and time_left > 0:
@@ -98,35 +103,6 @@ class SessionManager:
         if (session_type in (5, 6, 7, 10, 11) and
             not self.grid_formed and time_left > 0):
             self.grid_formed = True
-
-        # -----------------------------------------------------
-        # FORMATION LAP
-        # -----------------------------------------------------
-        # Works for both session_type 10 and WGP/race formation detection
-        if self.telemetry_state.is_formation_lap:
-            if not self.formation_lap_announced:
-                print("[SESSION] FORMATION_LAP_START")
-                self._emit(EventType.FORMATION_LAP_START)
-                self.formation_lap_announced = True
-
-            # Sector 3 of formation lap = "Find your grid slot" (session 10 or 15)
-            sector = self.telemetry_state.sector
-            session_type = self.telemetry_state.session_type
-
-            # Debug: print sector only when it changes
-            if sector != self._last_sector:
-                print(f"[DEBUG] sector={sector}")
-                self._last_sector = sector
-
-            if (sector == 2 and 
-                session_type in (10, 15) and  # FORMATION_LAP or WORLD_GRAND_PRIX
-                not self.formation_sector3_announced):
-                print("[SESSION] FORMATION_LAP_SECTOR3")
-                self._emit(EventType.FORMATION_LAP_SECTOR3)
-                self.formation_sector3_announced = True
-        else:
-            self.formation_lap_announced = False
-            self.formation_sector3_announced = False
 
         # -----------------------------------------------------
         # GARAGE ENTERED / EXITED (inferred from driver_status)
