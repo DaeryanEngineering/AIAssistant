@@ -21,7 +21,7 @@ class AIMode(BaseMode):
         self.waiting_for_user = True
 
     def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine,
-                objective_manager=None, ers_drs_manager=None, career=None):
+                objective_manager=None, ers_drs_manager=None, career=None, telemetry_state=None):
         av_manager.set_visible(True)
 
         if self.waiting_for_user:

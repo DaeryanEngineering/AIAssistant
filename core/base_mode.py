@@ -14,7 +14,8 @@ class BaseMode:
     def on_exit(self):
         pass
 
-    def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine, objective_manager=None, ers_drs_manager=None, career=None):
+    def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine, 
+              objective_manager=None, ers_drs_manager=None, career=None, telemetry_state=None):
         """
         Called every frame by AIRoot.
         Subclasses override this with mode-specific behavior.

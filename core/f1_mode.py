@@ -143,7 +143,7 @@ class F1Mode(BaseMode):
         return RadioLines.get_f1_practice("ERS Management", tier)
 
     def update(self, input_manager, intent_parser, response_brain, av_manager, tts_engine,
-                objective_manager=None, ers_drs_manager=None, career=None):
+                objective_manager=None, ers_drs_manager=None, career=None, telemetry_state=None):
         av_manager.set_visible(True)
 
         user_text = input_manager.get_text()
