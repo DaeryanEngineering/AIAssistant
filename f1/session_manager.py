@@ -28,6 +28,7 @@ class SessionManager:
         self._last_driver_status = None
         self._in_garage = False
         self._session_ready_announced = False
+        self._last_sector = None
 
     # ---------------------------------------------------------
     # Internal helper
@@ -111,6 +112,12 @@ class SessionManager:
             # Sector 3 of formation lap = "Find your grid slot" (session 10 or 15)
             sector = self.telemetry_state.sector
             session_type = self.telemetry_state.session_type
+
+            # Debug: print sector only when it changes
+            if sector != self._last_sector:
+                print(f"[DEBUG] sector={sector}")
+                self._last_sector = sector
+
             if (sector == 2 and 
                 session_type in (10, 15) and  # FORMATION_LAP or WORLD_GRAND_PRIX
                 not self.formation_sector3_announced):

@@ -72,6 +72,11 @@ class F1EngineerMode(F1Mode):
                     av_manager.set_state("idle")
                     return
 
+                if intent.intent == "find_grid_slot":
+                    from core.events import EventType
+                    telemetry_state._emit(EventType.FORMATION_LAP_SECTOR3)
+                    return
+
                 # Objective commands
                 if intent.intent == "objective_start":
                     objective_manager.start_objective(

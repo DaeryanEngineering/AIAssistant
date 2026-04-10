@@ -170,6 +170,18 @@ class IntentParser:
                     confidence=0.9
                 )
 
+        # Find grid slot
+        grid_triggers = [
+            "find grid slot", "grid slot", "find your spot", "stay right",
+        ]
+        for trigger in grid_triggers:
+            if trigger in text:
+                return Command(
+                    intent="find_grid_slot",
+                    parameters={},
+                    confidence=0.9
+                )
+
         return None
 
     # ---------------------------------------------------------
