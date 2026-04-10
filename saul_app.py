@@ -120,6 +120,8 @@ def main():
     LOOP_HZ = 20
     LOOP_PERIOD = 1.0 / LOOP_HZ
 
+    _session_debug_printed = False
+
     while True:
         loop_start = time.perf_counter()
 
@@ -133,7 +135,7 @@ def main():
         # Only run if in Engineer mode
         mode_name = type(saul.current_mode).__name__ if saul.current_mode else "None"
         if saul.current_mode and isinstance(saul.current_mode, F1EngineerMode):
-            ers_drs_manager.update()
+            ers_drs_manager.update(career=career)
 
         # 4. Saul AI update (intent handling for AI/chat modes)
         saul.update()
@@ -142,12 +144,6 @@ def main():
         gap_line = gap_worker.get_gap_call_if_ready()
         if gap_line:
             saul.tts_engine.speak(gap_line, radio=True, play_beep=True)
-
-        # 6. Debug output
-        session = telemetry_manager.state.session
-        session_type_name = session.session_type_string if session else "None"
-        ideal_pit = telemetry_manager.state.ideal_pit_lap if session else 0
-        print(f"[DEBUG] session_type={session_type_name} ideal_pit_lap={ideal_pit}")
 
         # Frame timing - enforce 20Hz
         elapsed = time.perf_counter() - loop_start

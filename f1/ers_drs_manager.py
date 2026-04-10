@@ -136,8 +136,12 @@ class ERSDRSManager:
     # MAIN UPDATE LOOP
     # ---------------------------------------------------------
 
-    def update(self):
+    def update(self, career=None):
         """Called every telemetry tick."""
+        # Skip entirely for F2 (no ERS/DRS)
+        if career and career.series == "F2":
+            return
+
         # Get telemetry data for ERS/DRS calculations
         status = self.telemetry.car_status
         telemetry = self.telemetry.car_telemetry

@@ -203,6 +203,18 @@ class TelemetryState:
         return self.session.m_sessionType
 
     @property
+    def is_session_ready(self) -> bool:
+        if not self.session:
+            return False
+        s = self.session
+        return (
+            s.m_sessionType != 0 and
+            s.m_formula != 0 and
+            s.m_gameMode != 0 and
+            any(x != 0 for x in s.m_weekendStructure)
+        )
+
+    @property
     def is_formation_lap(self) -> bool:
         if not self.session:
             return False

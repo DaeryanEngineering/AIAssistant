@@ -49,6 +49,7 @@ class EventType(Enum):
     RAIN_SOON = auto()
     RAIN_ETA_UPDATE = auto()
     SESSION_START = auto()
+    SESSION_READY = auto()
     SESSION_END = auto()
     SESSION_TYPE_CHANGED = auto()
     SAFETY_CAR_END = auto()

@@ -1874,6 +1874,28 @@ class RadioLines:
         },
 
         # ---------------------------------------------------------
+        # SESSION READY
+        # ---------------------------------------------------------
+        "session_ready": {
+            "sharp": [
+                "Session ready, Let's go, ",
+                "Ready to race, ",
+            ],
+            "professional": [
+                "Session ready, Let's go, ",
+                "Ready to race, ",
+            ],
+            "supportive": [
+                "Session ready, Let's do this, ",
+                "Ready to race, You've got this, ",
+            ],
+            "partnership": [
+                "Session ready, Together we got this, ",
+                "Ready to race, Let's go, ",
+            ],
+        },
+
+        # ---------------------------------------------------------
         # SESSION END
         # ---------------------------------------------------------
         "session_end": {

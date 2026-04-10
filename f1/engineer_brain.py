@@ -350,6 +350,9 @@ class EngineerBrain:
     def handle_session_start(self, **_):
         self._say("session_start")
 
+    def handle_session_ready(self, **_):
+        self._say("session_ready")
+
     def handle_session_end(self, **_):
         self._say("session_end")
 

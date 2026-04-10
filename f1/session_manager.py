@@ -27,6 +27,7 @@ class SessionManager:
         self.formation_sector3_announced = False
         self._last_driver_status = None
         self._in_garage = False
+        self._session_ready_announced = False
 
     # ---------------------------------------------------------
     # Internal helper
@@ -53,6 +54,14 @@ class SessionManager:
             15: "WORLD_GRAND_PRIX"
         }
         type_name = type_names.get(session_type, f"UNKNOWN({session_type})")
+
+        # -----------------------------------------------------
+        # SESSION READY
+        # -----------------------------------------------------
+        if self.telemetry_state.is_session_ready and not getattr(self, '_session_ready_announced', False):
+            print("[SESSION] SESSION_READY")
+            self._emit(EventType.SESSION_READY)
+            self._session_ready_announced = True
 
         # -----------------------------------------------------
         # SESSION START
@@ -99,11 +108,11 @@ class SessionManager:
                 self._emit(EventType.FORMATION_LAP_START)
                 self.formation_lap_announced = True
 
-            # Sector 3 of formation lap = "Find your grid slot" (only for session_type 10)
+            # Sector 3 of formation lap = "Find your grid slot" (session 10 or 15)
             sector = self.telemetry_state.sector
             session_type = self.telemetry_state.session_type
             if (sector == 2 and 
-                session_type == 10 and  # FORMATION_LAP session type only
+                session_type in (10, 15) and  # FORMATION_LAP or WORLD_GRAND_PRIX
                 not self.formation_sector3_announced):
                 print("[SESSION] FORMATION_LAP_SECTOR3")
                 self._emit(EventType.FORMATION_LAP_SECTOR3)
