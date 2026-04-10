@@ -48,25 +48,30 @@ class RaceBehavior:
         """
 
         # -----------------------------------------------------
-        # RACE START
+        # RACE START (only after formation lap ends)
         # -----------------------------------------------------
-        if session.m_sessionType == 11:  # race
-            if not self.race_started and session.m_totalLaps > 0:
+        if session.m_sessionType in (11, 15):  # race or World Grand Prix
+            if not self.race_started and session.m_totalLaps > 0 and session.m_formationLap == 0:
+                print(f"[RACE] RACE_START_GRID total_laps={session.m_totalLaps}")
                 self._emit(EventType.RACE_START_GRID)
                 self.race_started = True
 
         # -----------------------------------------------------
         # LAST 5 LAPS / LAST LAP
         # -----------------------------------------------------
+        if lap_data is None:
+            return
         lap_number = lap_data.m_currentLapNum
         total_laps = session.m_totalLaps
         laps_remaining = total_laps - lap_number
 
         if laps_remaining == 5:
+            print(f"[RACE] LAST_FIVE_LAPS lap={lap_number} pos={lap_data.m_carPosition}")
             self._emit(EventType.LAST_FIVE_LAPS,
                        position=lap_data.m_carPosition)
 
         if laps_remaining == 1:
+            print(f"[RACE] LAST_LAP lap={lap_number} pos={lap_data.m_carPosition}")
             self._emit(EventType.LAST_LAP,
                        position=lap_data.m_carPosition)
 
@@ -80,6 +85,7 @@ class RaceBehavior:
         # -----------------------------------------------------
         if (not self.pit_window_open_announced and
                 lap_number >= session.m_pitStopWindowIdealLap):
+            print(f"[RACE] PIT_WINDOW_OPEN lap={lap_number} ideal={session.m_pitStopWindowIdealLap}")
             self._emit(EventType.PIT_WINDOW_OPEN)
             self.pit_window_open_announced = True
 
@@ -89,6 +95,7 @@ class RaceBehavior:
         if (self.pit_window_open_announced and
             not self.pit_window_sector3_announced and
             sector == 2):
+            print(f"[RACE] PIT_WINDOW_SECTOR3 lap={lap_number}")
             self._emit(EventType.PIT_WINDOW_SECTOR3)
             self.pit_window_sector3_announced = True
 
@@ -115,19 +122,22 @@ class RaceBehavior:
             unsafe = True
 
         if unsafe:
+            print("[RACE] SAFETY_OVERRIDE_REQUIRED (unsafe conditions)")
             self._emit(EventType.SAFETY_OVERRIDE_REQUIRED)
 
         # -----------------------------------------------------
         # RACE FINISH DETECTION
         # -----------------------------------------------------
-        if session.m_sessionType == 11 and not self._finish_announced:
+        if session.m_sessionType in (11, 15) and not self._finish_announced:
             if session.m_sessionTimeLeft == 0:
                 fc = self.telemetry_state.get_player_final_classification()
                 if fc:
                     self._finish_announced = True
                     if fc.m_resultStatus == 3:  # FINISHED
                         if fc.m_position == 1:
+                            print(f"[RACE] RACE_WIN pos={fc.m_position} points={fc.m_points}")
                             self._emit(EventType.RACE_WIN)
+                        print(f"[RACE] RACE_FINISH pos={fc.m_position} points={fc.m_points}")
                         self._emit(EventType.RACE_FINISH,
                                    position=fc.m_position,
                                    points=fc.m_points)

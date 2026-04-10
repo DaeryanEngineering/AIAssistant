@@ -51,6 +51,7 @@ class SessionType(IntEnum):
     RACE = 11
     RACE_2 = 12
     TIME_TRIAL = 13
+    WORLD_GRAND_PRIX = 15
 
 
 class Weather(IntEnum):
@@ -176,9 +177,9 @@ class Platform(IntEnum):
 # Struct Formats
 # ------------------------------------------------------------
 
-HEADER_FORMAT = "<HBBBBIIfIIBB"
+HEADER_FORMAT = "<HBBBBBQfIIBB"
 HEADER_STRUCT = struct.Struct(HEADER_FORMAT)
-HEADER_SIZE = HEADER_STRUCT.size  # 28 bytes
+HEADER_SIZE = HEADER_STRUCT.size  # 29 bytes
 
 
 # ------------------------------------------------------------
@@ -201,8 +202,8 @@ class PacketHeader:
     m_secondaryPlayerCarIndex: int
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "PacketHeader":
-        unpacked = HEADER_STRUCT.unpack(data[:HEADER_SIZE])
+    def from_bytes(cls, data: bytes, offset: int = 0) -> "PacketHeader":
+        unpacked = HEADER_STRUCT.unpack_from(data, offset)
         return cls(
             m_packetFormat=unpacked[0],
             m_gameYear=unpacked[1],
@@ -234,13 +235,16 @@ class PacketHeader:
 # Packet 0: Motion
 # ------------------------------------------------------------
 
-CAR_MOTION_FORMAT = "<fff fff hhh hhh fff fff"
+MAX_CARS = 22
+
+CAR_MOTION_FORMAT = "<fff" \
+                    "fff" \
+                    "hhh" \
+                    "hhh" \
+                    "fff" \
+                    "fff"
 CAR_MOTION_STRUCT = struct.Struct(CAR_MOTION_FORMAT)
 CAR_MOTION_SIZE = CAR_MOTION_STRUCT.size  # 60 bytes
-
-MOTION_PACKET_FORMAT = "<" \
-    + "B" * MAX_CARS * 15  # 22 cars, 15 floats/h shorts
-MOTION_PACKET_STRUCT = struct.Struct(MOTION_PACKET_FORMAT)
 
 
 @dataclass
@@ -265,8 +269,8 @@ class CarMotionData:
     m_roll: float
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "CarMotionData":
-        unpacked = CAR_MOTION_STRUCT.unpack(data[:CAR_MOTION_SIZE])
+    def from_bytes(cls, data: bytes, offset: int) -> "CarMotionData":
+        unpacked = CAR_MOTION_STRUCT.unpack_from(data, offset)
         return cls(
             m_worldPositionX=unpacked[0],
             m_worldPositionY=unpacked[1],
@@ -298,9 +302,9 @@ class PacketMotionData:
     def from_bytes(cls, data: bytes) -> "PacketMotionData":
         header = PacketHeader.from_bytes(data)
         offset = HEADER_SIZE
-        cars = []
+        cars: list[CarMotionData] = []
         for _ in range(MAX_CARS):
-            cars.append(CarMotionData.from_bytes(data[offset:offset + CAR_MOTION_SIZE]))
+            cars.append(CarMotionData.from_bytes(data, offset))
             offset += CAR_MOTION_SIZE
         return cls(header=header, car_motion_data=cars)
 
@@ -312,6 +316,9 @@ class PacketMotionData:
 # Packet 1: Session
 # ------------------------------------------------------------
 
+MAX_MARSHAL_ZONES = 21
+MAX_WEATHER_SAMPLES = 64
+
 MARSHAL_ZONE_FORMAT = "<fb"
 MARSHAL_ZONE_STRUCT = struct.Struct(MARSHAL_ZONE_FORMAT)
 MARSHAL_ZONE_SIZE = MARSHAL_ZONE_STRUCT.size  # 5 bytes
@@ -320,10 +327,47 @@ WEATHER_FORECAST_FORMAT = "<BBBbbbbB"
 WEATHER_FORECAST_STRUCT = struct.Struct(WEATHER_FORECAST_FORMAT)
 WEATHER_FORECAST_SIZE = WEATHER_FORECAST_STRUCT.size  # 8 bytes
 
-MAX_MARSHAL_ZONES = 21
-MAX_WEATHER_SAMPLES = 64
+SESSION_BASIC_FORMAT = (
+    "<"
+    "BBB"   # weather, trackTemp, airTemp
+    "BH"    # totalLaps, trackLength
+    "Bb"    # sessionType, trackId
+    "B"     # formula
+    "HH"    # sessionTimeLeft, sessionDuration
+    "BBBB"  # pitSpeedLimit, gamePaused, isSpectating, spectatorCarIndex
+    "B"     # sliProNativeSupport
+    "B"     # numMarshalZones
+)
+SESSION_BASIC_STRUCT = struct.Struct(SESSION_BASIC_FORMAT)
 
-SESSION_PACKET_SIZE = 753
+SESSION_MORE_FORMAT = "<BBB"  # safetyCarStatus, networkGame, numWeatherForecastSamples
+SESSION_MORE_STRUCT = struct.Struct(SESSION_MORE_FORMAT)
+
+SESSION_REST_FORMAT = (
+    "<"
+    "B"      # forecastAccuracy
+    "I"      # aiDifficulty
+    "III"    # seasonLinkIdentifier, weekendLinkIdentifier, sessionLinkIdentifier
+    "BBB"    # pitStopWindowIdealLap, pitStopWindowLatestLap, pitStopRejoinPosition
+    "BBBBBB" # steeringAssist, brakingAssist, gearboxAssist, pitAssist, pitReleaseAssist, ersAssist
+    "BB"     # drsAssist, dynamicRacingLine
+    "B"      # dynamicRacingLineType
+    "BB"     # gameMode, ruleSet
+    "I"      # timeOfDay
+    "B"      # sessionLength
+    "BBBB"   # speedUnitsLeadPlayer, temperatureUnitsLeadPlayer, speedUnitsSecondaryPlayer, temperatureUnitsSecondaryPlayer
+    "BBB"    # numSafetyCarPeriods, numVirtualSafetyCarPeriods, numRedFlagPeriods
+    "BBBB"   # equalCarPerformance, recoveryMode, flashbackLimit, surfaceType
+    "BB"     # lowFuelMode, raceStarts
+    "BBBBB"  # tyreTemperature, pitLaneTyreSim, carDamage, carDamageRate, collisions
+    "BB"     # collisionsOffForFirstLapOnly, mpUnsafePitRelease
+    "BB"     # mpOffForGriefing, cornerCuttingStringency
+    "BB"     # parcFermeRules, pitStopExperience
+    "BB"     # safetyCar, safetyCarExperience
+    "BB"     # formationLap, formationLapExperience
+    "BBBB"   # redFlags, affectsLicenceLevelSolo, affectsLicenceLevelMP, numSessionsInWeekend
+)
+SESSION_REST_STRUCT = struct.Struct(SESSION_REST_FORMAT)
 
 
 @dataclass
@@ -332,9 +376,9 @@ class MarshalZone:
     m_zoneFlag: int
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "MarshalZone":
-        unpacked = MARSHAL_ZONE_STRUCT.unpack(data[:MARSHAL_ZONE_SIZE])
-        return cls(m_zoneStart=unpacked[0], m_zoneFlag=unpacked[1])
+    def from_bytes(cls, data: bytes, offset: int) -> "MarshalZone":
+        z_start, z_flag = MARSHAL_ZONE_STRUCT.unpack_from(data, offset)
+        return cls(m_zoneStart=z_start, m_zoneFlag=z_flag)
 
     @property
     def flag(self) -> FIAFlag:
@@ -353,8 +397,8 @@ class WeatherForecastSample:
     m_rainPercentage: int
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "WeatherForecastSample":
-        unpacked = WEATHER_FORECAST_STRUCT.unpack(data[:WEATHER_FORECAST_SIZE])
+    def from_bytes(cls, data: bytes, offset: int) -> "WeatherForecastSample":
+        unpacked = WEATHER_FORECAST_STRUCT.unpack_from(data, offset)
         return cls(*unpacked)
 
     @property
@@ -448,146 +492,188 @@ class PacketSessionData:
         header = PacketHeader.from_bytes(data)
         offset = HEADER_SIZE
 
-        basic = struct.unpack_from("<" +
-            "BBB"    # weather, trackTemp, airTemp
-            "BH"     # totalLaps, trackLength
-            "Bb"     # sessionType, trackId
-            "B"      # formula
-            "HH"     # sessionTimeLeft, sessionDuration
-            "BBBB"   # pitSpeedLimit, gamePaused, isSpectating, spectatorCarIndex
-            "B"      # sliProNativeSupport
-            "B"      # numMarshalZones
-            , data, offset)
-        offset += 21
+        basic = SESSION_BASIC_STRUCT.unpack_from(data, offset)
+        offset += SESSION_BASIC_STRUCT.size
 
-        marshal_zones = []
-        for _ in range(basic[10]):  # numMarshalZones
-            marshal_zones.append(MarshalZone.from_bytes(data[offset:offset + MARSHAL_ZONE_SIZE]))
+        (
+            weather,
+            trackTemp,
+            airTemp,
+            totalLaps,
+            trackLength,
+            sessionType,
+            trackId,
+            formula,
+            sessionTimeLeft,
+            sessionDuration,
+            pitSpeedLimit,
+            gamePaused,
+            isSpectating,
+            spectatorCarIndex,
+            sliProNativeSupport,
+            numMarshalZones,
+        ) = basic
+
+        marshal_zones: list[MarshalZone] = []
+        for _ in range(numMarshalZones):
+            mz = MarshalZone.from_bytes(data, offset)
+            marshal_zones.append(mz)
             offset += MARSHAL_ZONE_SIZE
 
-        more = struct.unpack_from("<" +
-            "BB"     # safetyCarStatus, networkGame
-            "B"      # numWeatherForecastSamples
-            , data, offset)
-        offset += 3
+        more = SESSION_MORE_STRUCT.unpack_from(data, offset)
+        offset += SESSION_MORE_STRUCT.size
 
-        weather_samples = []
-        for _ in range(more[2]):  # numWeatherForecastSamples
-            weather_samples.append(WeatherForecastSample.from_bytes(
-                data[offset:offset + WEATHER_FORECAST_SIZE]))
+        safetyCarStatus, networkGame, numWeatherForecastSamples = more
+
+        weather_samples: list[WeatherForecastSample] = []
+        for _ in range(numWeatherForecastSamples):
+            ws = WeatherForecastSample.from_bytes(data, offset)
+            weather_samples.append(ws)
             offset += WEATHER_FORECAST_SIZE
 
-        rest = struct.unpack_from("<" +
-            "B"      # forecastAccuracy
-            "I"      # aiDifficulty
-            "III"    # seasonLinkIdentifier, weekendLinkIdentifier, sessionLinkIdentifier
-            "BBB"    # pitStopWindowIdealLap, pitStopWindowLatestLap, pitStopRejoinPosition
-            "BBBBBB" # steeringAssist, brakingAssist, gearboxAssist, pitAssist, pitReleaseAssist, ersAssist
-            "BB"     # drsAssist, dynamicRacingLine
-            "B"      # dynamicRacingLineType
-            "BB"     # gameMode, ruleSet
-            "I"      # timeOfDay
-            "B"      # sessionLength
-            "BBBB"   # speedUnitsLeadPlayer, temperatureUnitsLeadPlayer, speedUnitsSecondaryPlayer, temperatureUnitsSecondaryPlayer
-            "BBB"    # numSafetyCarPeriods, numVirtualSafetyCarPeriods, numRedFlagPeriods
-            "BBBB"   # equalCarPerformance, recoveryMode, flashbackLimit, surfaceType
-            "BB"     # lowFuelMode, raceStarts
-            "BBBBB"  # tyreTemperature, pitLaneTyreSim, carDamage, carDamageRate, collisions
-            "BB"     # collisionsOffForFirstLapOnly, mpUnsafePitRelease
-            "BB"     # mpOffForGriefing, cornerCuttingStringency
-            "BB"     # parcFermeRules, pitStopExperience
-            "BB"     # safetyCar, safetyCarExperience
-            "BB"     # formationLap, formationLapExperience
-            "BBBBB"  # redFlags, affectsLicenceLevelSolo, affectsLicenceLevelMP, numSessionsInWeekend
-            , data, offset)
-        offset += 66
+        rest = SESSION_REST_STRUCT.unpack_from(data, offset)
+        offset += SESSION_REST_STRUCT.size
+
+        (
+            forecastAccuracy,
+            aiDifficulty,
+            seasonLinkIdentifier,
+            weekendLinkIdentifier,
+            sessionLinkIdentifier,
+            pitStopWindowIdealLap,
+            pitStopWindowLatestLap,
+            pitStopRejoinPosition,
+            steeringAssist,
+            brakingAssist,
+            gearboxAssist,
+            pitAssist,
+            pitReleaseAssist,
+            ersAssist,
+            drsAssist,
+            dynamicRacingLine,
+            dynamicRacingLineType,
+            gameMode,
+            ruleSet,
+            timeOfDay,
+            sessionLength,
+            speedUnitsLeadPlayer,
+            temperatureUnitsLeadPlayer,
+            speedUnitsSecondaryPlayer,
+            temperatureUnitsSecondaryPlayer,
+            numSafetyCarPeriods,
+            numVirtualSafetyCarPeriods,
+            numRedFlagPeriods,
+            equalCarPerformance,
+            recoveryMode,
+            flashbackLimit,
+            surfaceType,
+            lowFuelMode,
+            raceStarts,
+            tyreTemperature,
+            pitLaneTyreSim,
+            carDamage,
+            carDamageRate,
+            collisions,
+            collisionsOffForFirstLapOnly,
+            mpUnsafePitRelease,
+            mpOffForGriefing,
+            cornerCuttingStringency,
+            parcFermeRules,
+            pitStopExperience,
+            safetyCar,
+            safetyCarExperience,
+            formationLap,
+            formationLapExperience,
+            redFlags,
+            affectsLicenceLevelSolo,
+            affectsLicenceLevelMP,
+            numSessionsInWeekend,
+        ) = rest
 
         weekend_structure = list(data[offset:offset + 12])
         offset += 12
 
-        final = struct.unpack_from("<" +
-            "ff"     # sector2LapDistanceStart, sector3LapDistanceStart
-            , data, offset)
+        sector2LapDistanceStart, sector3LapDistanceStart = struct.unpack_from("<ff", data, offset)
 
         return cls(
             header=header,
-            m_weather=basic[0],
-            m_trackTemperature=basic[1],
-            m_airTemperature=basic[2],
-            m_totalLaps=basic[3],
-            m_trackLength=basic[4],
-            m_sessionType=basic[5],
-            m_trackId=basic[6],
-            m_formula=basic[7],
-            m_sessionTimeLeft=basic[8],
-            m_sessionDuration=basic[9],
-            m_pitSpeedLimit=basic[10],
-            m_gamePaused=basic[11],
-            m_isSpectating=basic[12],
-            m_spectatorCarIndex=basic[13],
-            m_sliProNativeSupport=basic[14],
-            m_numMarshalZones=basic[15],
+            m_weather=weather,
+            m_trackTemperature=trackTemp,
+            m_airTemperature=airTemp,
+            m_totalLaps=totalLaps,
+            m_trackLength=trackLength,
+            m_sessionType=sessionType,
+            m_trackId=trackId,
+            m_formula=formula,
+            m_sessionTimeLeft=sessionTimeLeft,
+            m_sessionDuration=sessionDuration,
+            m_pitSpeedLimit=pitSpeedLimit,
+            m_gamePaused=gamePaused,
+            m_isSpectating=isSpectating,
+            m_spectatorCarIndex=spectatorCarIndex,
+            m_sliProNativeSupport=sliProNativeSupport,
+            m_numMarshalZones=numMarshalZones,
             m_marshalZones=marshal_zones,
-            m_safetyCarStatus=more[0],
-            m_networkGame=more[1],
-            m_numWeatherForecastSamples=more[2],
+            m_safetyCarStatus=safetyCarStatus,
+            m_networkGame=networkGame,
+            m_numWeatherForecastSamples=numWeatherForecastSamples,
             m_weatherForecastSamples=weather_samples,
-            m_forecastAccuracy=rest[0],
-            m_aiDifficulty=rest[1],
-            m_seasonLinkIdentifier=rest[2],
-            m_weekendLinkIdentifier=rest[3],
-            m_sessionLinkIdentifier=rest[4],
-            m_pitStopWindowIdealLap=rest[5],
-            m_pitStopWindowLatestLap=rest[6],
-            m_pitStopRejoinPosition=rest[7],
-            m_steeringAssist=rest[8],
-            m_brakingAssist=rest[9],
-            m_gearboxAssist=rest[10],
-            m_pitAssist=rest[11],
-            m_pitReleaseAssist=rest[12],
-            m_ersAssist=rest[13],
-            m_drsAssist=rest[14],
-            m_dynamicRacingLine=rest[15],
-            m_dynamicRacingLineType=rest[16],
-            m_gameMode=rest[17],
-            m_ruleSet=rest[18],
-            m_timeOfDay=rest[19],
-            m_sessionLength=rest[20],
-            m_speedUnitsLeadPlayer=rest[21],
-            m_temperatureUnitsLeadPlayer=rest[22],
-            m_speedUnitsSecondaryPlayer=rest[23],
-            m_temperatureUnitsSecondaryPlayer=rest[24],
-            m_numSafetyCarPeriods=rest[25],
-            m_numVirtualSafetyCarPeriods=rest[26],
-            m_numRedFlagPeriods=rest[27],
-            m_equalCarPerformance=rest[28],
-            m_recoveryMode=rest[29],
-            m_flashbackLimit=rest[30],
-            m_surfaceType=rest[31],
-            m_lowFuelMode=rest[32],
-            m_raceStarts=rest[33],
-            m_tyreTemperature=rest[34],
-            m_pitLaneTyreSim=rest[35],
-            m_carDamage=rest[36],
-            m_carDamageRate=rest[37],
-            m_collisions=rest[38],
-            m_collisionsOffForFirstLapOnly=rest[39],
-            m_mpUnsafePitRelease=rest[40],
-            m_mpOffForGriefing=rest[41],
-            m_cornerCuttingStringency=rest[42],
-            m_parcFermeRules=rest[43],
-            m_pitStopExperience=rest[44],
-            m_safetyCar=rest[45],
-            m_safetyCarExperience=rest[46],
-            m_formationLap=rest[47],
-            m_formationLapExperience=rest[48],
-            m_redFlags=rest[49],
-            m_affectsLicenceLevelSolo=rest[50],
-            m_affectsLicenceLevelMP=rest[51],
-            m_numSessionsInWeekend=rest[52],
+            m_forecastAccuracy=forecastAccuracy,
+            m_aiDifficulty=aiDifficulty,
+            m_seasonLinkIdentifier=seasonLinkIdentifier,
+            m_weekendLinkIdentifier=weekendLinkIdentifier,
+            m_sessionLinkIdentifier=sessionLinkIdentifier,
+            m_pitStopWindowIdealLap=pitStopWindowIdealLap,
+            m_pitStopWindowLatestLap=pitStopWindowLatestLap,
+            m_pitStopRejoinPosition=pitStopRejoinPosition,
+            m_steeringAssist=steeringAssist,
+            m_brakingAssist=brakingAssist,
+            m_gearboxAssist=gearboxAssist,
+            m_pitAssist=pitAssist,
+            m_pitReleaseAssist=pitReleaseAssist,
+            m_ersAssist=ersAssist,
+            m_drsAssist=drsAssist,
+            m_dynamicRacingLine=dynamicRacingLine,
+            m_dynamicRacingLineType=dynamicRacingLineType,
+            m_gameMode=gameMode,
+            m_ruleSet=ruleSet,
+            m_timeOfDay=timeOfDay,
+            m_sessionLength=sessionLength,
+            m_speedUnitsLeadPlayer=speedUnitsLeadPlayer,
+            m_temperatureUnitsLeadPlayer=temperatureUnitsLeadPlayer,
+            m_speedUnitsSecondaryPlayer=speedUnitsSecondaryPlayer,
+            m_temperatureUnitsSecondaryPlayer=temperatureUnitsSecondaryPlayer,
+            m_numSafetyCarPeriods=numSafetyCarPeriods,
+            m_numVirtualSafetyCarPeriods=numVirtualSafetyCarPeriods,
+            m_numRedFlagPeriods=numRedFlagPeriods,
+            m_equalCarPerformance=equalCarPerformance,
+            m_recoveryMode=recoveryMode,
+            m_flashbackLimit=flashbackLimit,
+            m_surfaceType=surfaceType,
+            m_lowFuelMode=lowFuelMode,
+            m_raceStarts=raceStarts,
+            m_tyreTemperature=tyreTemperature,
+            m_pitLaneTyreSim=pitLaneTyreSim,
+            m_carDamage=carDamage,
+            m_carDamageRate=carDamageRate,
+            m_collisions=collisions,
+            m_collisionsOffForFirstLapOnly=collisionsOffForFirstLapOnly,
+            m_mpUnsafePitRelease=mpUnsafePitRelease,
+            m_mpOffForGriefing=mpOffForGriefing,
+            m_cornerCuttingStringency=cornerCuttingStringency,
+            m_parcFermeRules=parcFermeRules,
+            m_pitStopExperience=pitStopExperience,
+            m_safetyCar=safetyCar,
+            m_safetyCarExperience=safetyCarExperience,
+            m_formationLap=formationLap,
+            m_formationLapExperience=formationLapExperience,
+            m_redFlags=redFlags,
+            m_affectsLicenceLevelSolo=affectsLicenceLevelSolo,
+            m_affectsLicenceLevelMP=affectsLicenceLevelMP,
+            m_numSessionsInWeekend=numSessionsInWeekend,
             m_weekendStructure=weekend_structure,
-            m_sector2LapDistanceStart=final[0],
-            m_sector3LapDistanceStart=final[1],
+            m_sector2LapDistanceStart=sector2LapDistanceStart,
+            m_sector3LapDistanceStart=sector3LapDistanceStart,
         )
 
     @property
@@ -615,9 +701,10 @@ class PacketSessionData:
 # Packet 2: Lap Data
 # ------------------------------------------------------------
 
-LAP_DATA_FORMAT = "<II HB HB HB HB fff BBBB BBB BB B B HH B f B"
+# F1 25 Lap Data layout (per car)
+LAP_DATA_FORMAT = "<IIHBHBHBHBfffBBBBBBBBBBBBBBBHHBfB"
 LAP_DATA_STRUCT = struct.Struct(LAP_DATA_FORMAT)
-LAP_DATA_SIZE = LAP_DATA_STRUCT.size  # 87 bytes
+LAP_DATA_SIZE = LAP_DATA_STRUCT.size  # 57 bytes
 
 
 @dataclass
@@ -657,8 +744,8 @@ class LapData:
     m_speedTrapFastestLap: int
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "LapData":
-        unpacked = LAP_DATA_STRUCT.unpack(data[:LAP_DATA_SIZE])
+    def from_bytes(cls, data: bytes, offset: int) -> "LapData":
+        unpacked = LAP_DATA_STRUCT.unpack_from(data, offset)
         return cls(*unpacked)
 
     @property
@@ -674,12 +761,16 @@ class LapData:
         return self.m_sector1TimeMinutesPart * 60000 + self.m_sector1TimeMSPart
 
     @property
-    def sector1_time_seconds(self) -> float:
-        return self.sector1_time_ms / 1000.0
-
-    @property
     def sector2_time_ms(self) -> int:
         return self.m_sector2TimeMinutesPart * 60000 + self.m_sector2TimeMSPart
+
+    @property
+    def sector3_time_ms(self) -> int:
+        return max(0, self.m_currentLapTimeInMS - self.sector1_time_ms - self.sector2_time_ms)
+
+    @property
+    def sector1_time_seconds(self) -> float:
+        return self.sector1_time_ms / 1000.0
 
     @property
     def sector2_time_seconds(self) -> float:
@@ -687,8 +778,7 @@ class LapData:
 
     @property
     def sector3_time_seconds(self) -> float:
-        sector3_ms = self.m_currentLapTimeInMS - self.sector1_time_ms - self.sector2_time_ms
-        return max(0, sector3_ms / 1000.0)
+        return self.sector3_time_ms / 1000.0
 
     @property
     def delta_to_car_in_front_seconds(self) -> float:
@@ -699,6 +789,14 @@ class LapData:
     def delta_to_race_leader_seconds(self) -> float:
         total_ms = self.m_deltaToRaceLeaderMinutesPart * 60000 + self.m_deltaToRaceLeaderMSPart
         return total_ms / 1000.0
+
+    @property
+    def is_current_lap_valid(self) -> bool:
+        return self.m_currentLapInvalid == 0
+
+    @property
+    def is_in_pit_lane(self) -> bool:
+        return self.m_pitStatus != 0
 
     @property
     def is_pitting(self) -> bool:
@@ -733,29 +831,30 @@ class PacketLapData:
         header = PacketHeader.from_bytes(data)
         offset = HEADER_SIZE
 
-        laps = []
+        laps: list[LapData] = []
         for _ in range(MAX_CARS):
-            laps.append(LapData.from_bytes(data[offset:offset + LAP_DATA_SIZE]))
+            laps.append(LapData.from_bytes(data, offset))
             offset += LAP_DATA_SIZE
 
-        final = struct.unpack_from("<BB", data, offset)
+        pb_idx, rival_idx = struct.unpack_from("<BB", data, offset)
+
         return cls(
             header=header,
             m_lapData=laps,
-            m_timeTrialPBCarIdx=final[0],
-            m_timeTrialRivalCarIdx=final[1],
+            m_timeTrialPBCarIdx=pb_idx,
+            m_timeTrialRivalCarIdx=rival_idx,
         )
 
     def get_player_lap_data(self) -> LapData:
         return self.m_lapData[self.header.m_playerCarIndex]
 
     @property
-    def player_current_lap(self) -> int:
-        return self.get_player_lap_data().m_currentLapNum
-
-    @property
     def player_position(self) -> int:
         return self.get_player_lap_data().m_carPosition
+
+    @property
+    def player_current_lap(self) -> int:
+        return self.get_player_lap_data().m_currentLapNum
 
     @property
     def player_sector(self) -> int:
@@ -766,7 +865,8 @@ class PacketLapData:
 # Packet 3: Event
 # ------------------------------------------------------------
 
-EVENT_PACKET_SIZE = 45
+EVENT_PACKET_SIZE = 45   # fixed by spec
+EVENT_HEADER_SIZE = 4    # 4‑byte event string code
 
 
 @dataclass
@@ -775,70 +875,111 @@ class EventDataDetails:
     data: dict
 
     @classmethod
-    def from_bytes(cls, event_code: int, data: bytes) -> "EventDataDetails":
-        offset = 4  # Skip event string code
+    def from_bytes(cls, event_code: int, data: bytes, offset: int) -> "EventDataDetails":
+        """
+        offset points to the start of the event-specific data,
+        AFTER the 4‑byte event string code.
+        """
         details = {}
 
+        # Fastest Lap
         if event_code == EventCode.FTLP:
-            unpacked = struct.unpack_from("<Bf", data, offset)
-            details = {"vehicleIdx": unpacked[0], "lapTime": unpacked[1]}
+            vehicleIdx, lapTime = struct.unpack_from("<Bf", data, offset)
+            details = {"vehicleIdx": vehicleIdx, "lapTime": lapTime}
+
+        # Retirement
         elif event_code == EventCode.RTMT:
-            unpacked = struct.unpack_from("<BB", data, offset)
-            details = {"vehicleIdx": unpacked[0], "reason": unpacked[1]}
+            vehicleIdx, reason = struct.unpack_from("<BB", data, offset)
+            details = {"vehicleIdx": vehicleIdx, "reason": reason}
+
+        # DRS Disabled
         elif event_code == EventCode.DRSD:
-            unpacked = struct.unpack_from("<B", data, offset)
-            details = {"reason": unpacked[0]}
+            (reason,) = struct.unpack_from("<B", data, offset)
+            details = {"reason": reason}
+
+        # Team Mate In Pits
         elif event_code == EventCode.TMPT:
-            unpacked = struct.unpack_from("<B", data, offset)
-            details = {"vehicleIdx": unpacked[0]}
+            (vehicleIdx,) = struct.unpack_from("<B", data, offset)
+            details = {"vehicleIdx": vehicleIdx}
+
+        # Race Winner
         elif event_code == EventCode.RCWN:
-            unpacked = struct.unpack_from("<B", data, offset)
-            details = {"vehicleIdx": unpacked[0]}
+            (vehicleIdx,) = struct.unpack_from("<B", data, offset)
+            details = {"vehicleIdx": vehicleIdx}
+
+        # Penalty
         elif event_code == EventCode.PENA:
-            unpacked = struct.unpack_from("<BBBBBB", data, offset)
+            penaltyType, infringementType, vehicleIdx, otherVehicleIdx, time, lapNum = \
+                struct.unpack_from("<BBBBBB", data, offset)
+            placesGained = struct.unpack_from("<B", data, offset + 6)[0]
             details = {
-                "penaltyType": unpacked[0],
-                "infringementType": unpacked[1],
-                "vehicleIdx": unpacked[2],
-                "otherVehicleIdx": unpacked[3],
-                "time": unpacked[4],
-                "lapNum": unpacked[5],
-                "placesGained": data[offset + 6],
+                "penaltyType": penaltyType,
+                "infringementType": infringementType,
+                "vehicleIdx": vehicleIdx,
+                "otherVehicleIdx": otherVehicleIdx,
+                "time": time,
+                "lapNum": lapNum,
+                "placesGained": placesGained,
             }
+
+        # Speed Trap
         elif event_code == EventCode.SPTP:
-            unpacked = struct.unpack_from("<BfBBBf", data, offset)
+            vehicleIdx, speed, isOverallFastest, isDriverFastest, fastestVehicleIdx, fastestSpeed = \
+                struct.unpack_from("<BfBBBf", data, offset)
             details = {
-                "vehicleIdx": unpacked[0],
-                "speed": unpacked[1],
-                "isOverallFastestInSession": unpacked[2],
-                "isDriverFastestInSession": unpacked[3],
-                "fastestVehicleIdxInSession": unpacked[4],
-                "fastestSpeedInSession": unpacked[5],
+                "vehicleIdx": vehicleIdx,
+                "speed": speed,
+                "isOverallFastestInSession": isOverallFastest,
+                "isDriverFastestInSession": isDriverFastest,
+                "fastestVehicleIdxInSession": fastestVehicleIdx,
+                "fastestSpeedInSession": fastestSpeed,
             }
+
+        # Start Lights
         elif event_code == EventCode.STLG:
-            unpacked = struct.unpack_from("<B", data, offset)
-            details = {"numLights": unpacked[0]}
+            (numLights,) = struct.unpack_from("<B", data, offset)
+            details = {"numLights": numLights}
+
+        # Drive Through Served
         elif event_code == EventCode.DTSV:
-            unpacked = struct.unpack_from("<B", data, offset)
-            details = {"vehicleIdx": unpacked[0]}
+            (vehicleIdx,) = struct.unpack_from("<B", data, offset)
+            details = {"vehicleIdx": vehicleIdx}
+
+        # Stop Go Served
         elif event_code == EventCode.SGSV:
-            unpacked = struct.unpack_from("<Bf", data, offset)
-            details = {"vehicleIdx": unpacked[0], "stopTime": unpacked[1]}
+            vehicleIdx, stopTime = struct.unpack_from("<Bf", data, offset)
+            details = {"vehicleIdx": vehicleIdx, "stopTime": stopTime}
+
+        # Flashback
         elif event_code == EventCode.FLBK:
-            unpacked = struct.unpack_from("<If", data, offset)
-            details = {"flashbackFrameIdentifier": unpacked[0], "flashbackSessionTime": unpacked[1]}
+            frameId, sessionTime = struct.unpack_from("<If", data, offset)
+            details = {
+                "flashbackFrameIdentifier": frameId,
+                "flashbackSessionTime": sessionTime,
+            }
+
+        # Button Status
         elif event_code == EventCode.BUTN:
-            unpacked = struct.unpack_from("<I", data, offset)
-            details = {"buttonStatus": unpacked[0]}
+            (buttonStatus,) = struct.unpack_from("<I", data, offset)
+            details = {"buttonStatus": buttonStatus}
+
+        # Overtake
         elif event_code == EventCode.OVTK:
-            unpacked = struct.unpack_from("<BB", data, offset)
-            details = {"overtakingVehicleIdx": unpacked[0], "beingOvertakenVehicleIdx": unpacked[1]}
+            overtaking, overtaken = struct.unpack_from("<BB", data, offset)
+            details = {
+                "overtakingVehicleIdx": overtaking,
+                "beingOvertakenVehicleIdx": overtaken,
+            }
+
+        # Safety Car
         elif event_code == EventCode.SCAR:
-            unpacked = struct.unpack_from("<BB", data, offset)
-            details = {"safetyCarType": unpacked[0], "eventType": unpacked[1]}
+            scType, scEvent = struct.unpack_from("<BB", data, offset)
+            details = {"safetyCarType": scType, "eventType": scEvent}
+
+        # Collision
         elif event_code == EventCode.COLL:
-            unpacked = struct.unpack_from("<BB", data, offset)
-            details = {"vehicle1Idx": unpacked[0], "vehicle2Idx": unpacked[1]}
+            v1, v2 = struct.unpack_from("<BB", data, offset)
+            details = {"vehicle1Idx": v1, "vehicle2Idx": v2}
 
         return cls(event_type=event_code, data=details)
 
@@ -862,10 +1003,14 @@ class PacketEventData:
     @classmethod
     def from_bytes(cls, data: bytes) -> "PacketEventData":
         header = PacketHeader.from_bytes(data)
-        event_code_bytes = data[HEADER_SIZE:HEADER_SIZE + 4]
-        event_code_int = int.from_bytes(event_code_bytes, "little")
 
-        details = EventDataDetails.from_bytes(event_code_int, data)
+        # Read the 4‑byte event code string
+        event_code_bytes = data[HEADER_SIZE:HEADER_SIZE + EVENT_HEADER_SIZE]
+        event_code_int = int.from_bytes(event_code_bytes, "big")
+
+        # Event-specific data starts immediately after the 4‑byte code
+        details_offset = HEADER_SIZE + EVENT_HEADER_SIZE
+        details = EventDataDetails.from_bytes(event_code_int, data, details_offset)
 
         return cls(
             header=header,
@@ -891,9 +1036,18 @@ class PacketEventData:
 
 LIVERY_COLOUR_FORMAT = "<BBB"
 LIVERY_COLOUR_STRUCT = struct.Struct(LIVERY_COLOUR_FORMAT)
-LIVERY_COLOUR_SIZE = LIVERY_COLOUR_STRUCT.size
+LIVERY_COLOUR_SIZE = LIVERY_COLOUR_STRUCT.size  # 3 bytes
 
-PARTICIPANT_DATA_FORMAT = "<BBBB BBB 32s BBH BB"
+# F1 25 ParticipantData layout (per car)
+# NOTE: 32s = UTF‑8 name, null‑terminated, truncated with ellipsis if too long
+PARTICIPANT_DATA_FORMAT = (
+    "<"
+    "BBBB"     # aiControlled, driverId, networkId, teamId
+    "BBB"      # myTeam, raceNumber, nationality
+    "32s"      # name
+    "BBH"      # yourTelemetry, showOnlineNames, techLevel
+    "BB"       # platform, numColours
+)
 PARTICIPANT_DATA_STRUCT = struct.Struct(PARTICIPANT_DATA_FORMAT)
 PARTICIPANT_DATA_SIZE = PARTICIPANT_DATA_STRUCT.size  # 45 bytes
 
@@ -905,9 +1059,9 @@ class LiveryColour:
     blue: int
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "LiveryColour":
-        unpacked = LIVERY_COLOUR_STRUCT.unpack(data[:LIVERY_COLOUR_SIZE])
-        return cls(red=unpacked[0], green=unpacked[1], blue=unpacked[2])
+    def from_bytes(cls, data: bytes, offset: int) -> "LiveryColour":
+        r, g, b = LIVERY_COLOUR_STRUCT.unpack_from(data, offset)
+        return cls(red=r, green=g, blue=b)
 
 
 @dataclass
@@ -928,30 +1082,49 @@ class ParticipantData:
     m_liveryColours: list[LiveryColour]
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "ParticipantData":
-        unpacked = PARTICIPANT_DATA_STRUCT.unpack(data[:PARTICIPANT_DATA_SIZE])
-        name = unpacked[7].decode("utf-8", errors="replace").strip("\x00")
+    def from_bytes(cls, data: bytes, offset: int) -> "ParticipantData":
+        unpacked = PARTICIPANT_DATA_STRUCT.unpack_from(data, offset)
 
-        offset = PARTICIPANT_DATA_SIZE
-        livery_colours = []
-        for _ in range(min(unpacked[12], 4)):  # numColours
-            livery_colours.append(LiveryColour.from_bytes(data[offset:offset + LIVERY_COLOUR_SIZE]))
-            offset += LIVERY_COLOUR_SIZE
+        (
+            aiControlled,
+            driverId,
+            networkId,
+            teamId,
+            myTeam,
+            raceNumber,
+            nationality,
+            raw_name,
+            yourTelemetry,
+            showOnlineNames,
+            techLevel,
+            platform,
+            numColours,
+        ) = unpacked
+
+        name = raw_name.decode("utf-8", errors="replace").rstrip("\x00")
+
+        # Livery colours follow immediately after the 45‑byte struct
+        colour_offset = offset + PARTICIPANT_DATA_SIZE
+        livery_colours: list[LiveryColour] = []
+
+        for _ in range(min(numColours, 4)):  # spec: max 4 colours
+            livery_colours.append(LiveryColour.from_bytes(data, colour_offset))
+            colour_offset += LIVERY_COLOUR_SIZE
 
         return cls(
-            m_aiControlled=unpacked[0],
-            m_driverId=unpacked[1],
-            m_networkId=unpacked[2],
-            m_teamId=unpacked[3],
-            m_myTeam=unpacked[4],
-            m_raceNumber=unpacked[5],
-            m_nationality=unpacked[6],
+            m_aiControlled=aiControlled,
+            m_driverId=driverId,
+            m_networkId=networkId,
+            m_teamId=teamId,
+            m_myTeam=myTeam,
+            m_raceNumber=raceNumber,
+            m_nationality=nationality,
             m_name=name,
-            m_yourTelemetry=unpacked[8],
-            m_showOnlineNames=unpacked[9],
-            m_techLevel=unpacked[10],
-            m_platform=unpacked[11],
-            m_numColours=unpacked[12],
+            m_yourTelemetry=yourTelemetry,
+            m_showOnlineNames=showOnlineNames,
+            m_techLevel=techLevel,
+            m_platform=platform,
+            m_numColours=numColours,
             m_liveryColours=livery_colours,
         )
 
@@ -973,19 +1146,24 @@ class PacketParticipantsData:
     @classmethod
     def from_bytes(cls, data: bytes) -> "PacketParticipantsData":
         header = PacketHeader.from_bytes(data)
-        offset = HEADER_SIZE
 
-        num_active = data[offset]
-        offset += 1
+        # numActiveCars is 1 byte immediately after header
+        numActiveCars = data[HEADER_SIZE]
+        offset = HEADER_SIZE + 1
 
-        participants = []
+        participants: list[ParticipantData] = []
+
         for _ in range(MAX_CARS):
-            participants.append(ParticipantData.from_bytes(data[offset:offset + PARTICIPANT_DATA_SIZE + 12]))
-            offset += PARTICIPANT_DATA_SIZE + 12
+            participants.append(ParticipantData.from_bytes(data, offset))
+
+            # Each participant has:
+            # - 45‑byte struct
+            # - up to 4 × 3‑byte LiveryColour = 12 bytes
+            offset += PARTICIPANT_DATA_SIZE + (4 * LIVERY_COLOUR_SIZE)
 
         return cls(
             header=header,
-            m_numActiveCars=num_active,
+            m_numActiveCars=numActiveCars,
             m_participants=participants,
         )
 
@@ -1003,7 +1181,19 @@ class PacketParticipantsData:
 # Packet 5: Car Setups
 # ------------------------------------------------------------
 
-CAR_SETUP_FORMAT = "<BB BB ffff BBBB BB BB B ffff B f"
+CAR_SETUP_FORMAT = (
+    "<"
+    "BB"      # frontWing, rearWing
+    "BB"      # onThrottle, offThrottle
+    "ffff"    # frontCamber, rearCamber, frontToe, rearToe
+    "BBBB"    # frontSuspension, rearSuspension, frontAntiRollBar, rearAntiRollBar
+    "BB"      # frontSuspensionHeight, rearSuspensionHeight
+    "BB"      # brakePressure, brakeBias
+    "B"       # engineBraking
+    "ffff"    # rearLeftTyrePressure, rearRightTyrePressure, frontLeftTyrePressure, frontRightTyrePressure
+    "B"       # ballast
+    "f"       # fuelLoad
+)
 CAR_SETUP_STRUCT = struct.Struct(CAR_SETUP_FORMAT)
 CAR_SETUP_SIZE = CAR_SETUP_STRUCT.size  # 47 bytes
 
@@ -1035,8 +1225,8 @@ class CarSetupData:
     m_fuelLoad: float
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "CarSetupData":
-        unpacked = CAR_SETUP_STRUCT.unpack(data[:CAR_SETUP_SIZE])
+    def from_bytes(cls, data: bytes, offset: int) -> "CarSetupData":
+        unpacked = CAR_SETUP_STRUCT.unpack_from(data, offset)
         return cls(*unpacked)
 
 
@@ -1051,12 +1241,13 @@ class PacketCarSetupData:
         header = PacketHeader.from_bytes(data)
         offset = HEADER_SIZE
 
-        setups = []
+        setups: list[CarSetupData] = []
         for _ in range(MAX_CARS):
-            setups.append(CarSetupData.from_bytes(data[offset:offset + CAR_SETUP_SIZE]))
+            setups.append(CarSetupData.from_bytes(data, offset))
             offset += CAR_SETUP_SIZE
 
-        next_wing = struct.unpack_from("<f", data, offset)[0]
+        # Final float: nextFrontWingValue
+        (next_wing,) = struct.unpack_from("<f", data, offset)
 
         return cls(
             header=header,
@@ -1072,7 +1263,23 @@ class PacketCarSetupData:
 # Packet 6: Car Telemetry
 # ------------------------------------------------------------
 
-CAR_TELEMETRY_FORMAT = "<H fff B b H BB H 4H 4B 4B H 4f 4B"
+CAR_TELEMETRY_FORMAT = (
+    "<"
+    "H"        # speed
+    "fff"      # throttle, steer, brake
+    "B"        # clutch
+    "b"        # gear
+    "H"        # engineRPM
+    "B"        # drs
+    "B"        # revLightsPercent
+    "H"        # revLightsBitValue
+    "4H"       # brakesTemperature[4]
+    "4B"       # tyresSurfaceTemperature[4]
+    "4B"       # tyresInnerTemperature[4]
+    "H"        # engineTemperature
+    "4f"       # tyresPressure[4]
+    "4B"       # surfaceType[4]
+)
 CAR_TELEMETRY_STRUCT = struct.Struct(CAR_TELEMETRY_FORMAT)
 CAR_TELEMETRY_SIZE = CAR_TELEMETRY_STRUCT.size  # 60 bytes
 
@@ -1097,29 +1304,46 @@ class CarTelemetryData:
     m_surfaceType: tuple[int, int, int, int]
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "CarTelemetryData":
-        unpacked = CAR_TELEMETRY_STRUCT.unpack(data[:CAR_TELEMETRY_SIZE])
-        brakes_temp = tuple(unpacked[11:15])
-        surface_temp = tuple(unpacked[15:19])
-        inner_temp = tuple(unpacked[19:23])
-        pressures = tuple(unpacked[24:28])
-        surface_type = tuple(unpacked[28:32])
+    def from_bytes(cls, data: bytes, offset: int) -> "CarTelemetryData":
+        unpacked = CAR_TELEMETRY_STRUCT.unpack_from(data, offset)
+
+        # Index map based on struct layout
+        speed              = unpacked[0]
+        throttle           = unpacked[1]
+        steer              = unpacked[2]
+        brake              = unpacked[3]
+        clutch             = unpacked[4]
+        gear               = unpacked[5]
+        engineRPM          = unpacked[6]
+        drs                = unpacked[7]
+        revLightsPercent   = unpacked[8]
+        revLightsBitValue  = unpacked[9]
+
+        brakes_temp            = unpacked[10:14]
+        tyres_surface_temp     = unpacked[14:18]
+        tyres_inner_temp       = unpacked[18:22]
+
+        engineTemperature      = unpacked[22]
+
+        tyres_pressure         = unpacked[23:27]
+        surface_type           = unpacked[27:31]
+
         return cls(
-            m_speed=unpacked[0],
-            m_throttle=unpacked[1],
-            m_steer=unpacked[2],
-            m_brake=unpacked[3],
-            m_clutch=unpacked[4],
-            m_gear=unpacked[5],
-            m_engineRPM=unpacked[6],
-            m_drs=unpacked[7],
-            m_revLightsPercent=unpacked[8],
-            m_revLightsBitValue=unpacked[9],
+            m_speed=speed,
+            m_throttle=throttle,
+            m_steer=steer,
+            m_brake=brake,
+            m_clutch=clutch,
+            m_gear=gear,
+            m_engineRPM=engineRPM,
+            m_drs=drs,
+            m_revLightsPercent=revLightsPercent,
+            m_revLightsBitValue=revLightsBitValue,
             m_brakesTemperature=brakes_temp,
-            m_tyresSurfaceTemperature=surface_temp,
-            m_tyresInnerTemperature=inner_temp,
-            m_engineTemperature=unpacked[23],
-            m_tyresPressure=pressures,
+            m_tyresSurfaceTemperature=tyres_surface_temp,
+            m_tyresInnerTemperature=tyres_inner_temp,
+            m_engineTemperature=engineTemperature,
+            m_tyresPressure=tyres_pressure,
             m_surfaceType=surface_type,
         )
 
@@ -1131,7 +1355,7 @@ class CarTelemetryData:
     def gear_string(self) -> str:
         if self.m_gear == 0:
             return "N"
-        elif self.m_gear == -1:
+        if self.m_gear == -1:
             return "R"
         return str(self.m_gear)
 
@@ -1149,19 +1373,20 @@ class PacketCarTelemetryData:
         header = PacketHeader.from_bytes(data)
         offset = HEADER_SIZE
 
-        telemetry = []
+        telemetry: list[CarTelemetryData] = []
         for _ in range(MAX_CARS):
-            telemetry.append(CarTelemetryData.from_bytes(data[offset:offset + CAR_TELEMETRY_SIZE]))
+            telemetry.append(CarTelemetryData.from_bytes(data, offset))
             offset += CAR_TELEMETRY_SIZE
 
-        final = struct.unpack_from("<BBb", data, offset)
+        mfdPanelIndex, mfdPanelIndexSecondaryPlayer, suggestedGear = \
+            struct.unpack_from("<BBb", data, offset)
 
         return cls(
             header=header,
             m_carTelemetryData=telemetry,
-            m_mfdPanelIndex=final[0],
-            m_mfdPanelIndexSecondaryPlayer=final[1],
-            m_suggestedGear=final[2],
+            m_mfdPanelIndex=mfdPanelIndex,
+            m_mfdPanelIndexSecondaryPlayer=mfdPanelIndexSecondaryPlayer,
+            m_suggestedGear=suggestedGear,
         )
 
     def get_player_telemetry(self) -> CarTelemetryData:
@@ -1184,7 +1409,24 @@ class PacketCarTelemetryData:
 # Packet 7: Car Status
 # ------------------------------------------------------------
 
-CAR_STATUS_FORMAT = "<BBBB B ff f HH B B H BB B b fff B fff B"
+CAR_STATUS_FORMAT = (
+    "<"
+    "BBBB"     # tractionControl, antiLockBrakes, fuelMix, frontBrakeBias
+    "B"        # pitLimiterStatus
+    "ff"       # fuelInTank, fuelCapacity
+    "f"        # fuelRemainingLaps
+    "HH"       # maxRPM, idleRPM
+    "B"        # maxGears
+    "B"        # drsAllowed
+    "H"        # drsActivationDistance
+    "BB"       # actualTyreCompound, visualTyreCompound
+    "B"        # tyresAgeLaps
+    "b"        # vehicleFiaFlags (signed)
+    "fff"      # enginePowerICE, enginePowerMGUK, ersStoreEnergy
+    "B"        # ersDeployMode
+    "fff"      # ersHarvestedThisLapMGUK, ersHarvestedThisLapMGUH, ersDeployedThisLap
+    "B"        # networkPaused
+)
 CAR_STATUS_STRUCT = struct.Struct(CAR_STATUS_FORMAT)
 CAR_STATUS_SIZE = CAR_STATUS_STRUCT.size  # 58 bytes
 
@@ -1218,8 +1460,8 @@ class CarStatusData:
     m_networkPaused: int
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "CarStatusData":
-        unpacked = CAR_STATUS_STRUCT.unpack(data[:CAR_STATUS_SIZE])
+    def from_bytes(cls, data: bytes, offset: int) -> "CarStatusData":
+        unpacked = CAR_STATUS_STRUCT.unpack_from(data, offset)
         return cls(*unpacked)
 
     @property
@@ -1252,12 +1494,12 @@ class PacketCarStatusData:
         header = PacketHeader.from_bytes(data)
         offset = HEADER_SIZE
 
-        status = []
+        status_list: list[CarStatusData] = []
         for _ in range(MAX_CARS):
-            status.append(CarStatusData.from_bytes(data[offset:offset + CAR_STATUS_SIZE]))
+            status_list.append(CarStatusData.from_bytes(data, offset))
             offset += CAR_STATUS_SIZE
 
-        return cls(header=header, m_carStatusData=status)
+        return cls(header=header, m_carStatusData=status_list)
 
     def get_player_status(self) -> CarStatusData:
         return self.m_carStatusData[self.header.m_playerCarIndex]
@@ -1275,9 +1517,9 @@ class PacketCarStatusData:
 # Packet 8: Final Classification
 # ------------------------------------------------------------
 
-FINAL_CLASSIFICATION_FORMAT = "<BBBB BB B I d BBBB 8B 8B 8B"
+FINAL_CLASSIFICATION_FORMAT = "<BBBBBBBIdBBB8B8B8B"
 FINAL_CLASSIFICATION_STRUCT = struct.Struct(FINAL_CLASSIFICATION_FORMAT)
-FINAL_CLASSIFICATION_SIZE = FINAL_CLASSIFICATION_STRUCT.size  # 45 bytes
+FINAL_CLASSIFICATION_SIZE = FINAL_CLASSIFICATION_STRUCT.size  # 46 bytes
 
 
 @dataclass
@@ -1299,11 +1541,11 @@ class FinalClassificationData:
     m_tyreStintsEndLaps: list[int]
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "FinalClassificationData":
-        unpacked = FINAL_CLASSIFICATION_STRUCT.unpack(data[:FINAL_CLASSIFICATION_SIZE])
-        actual = list(unpacked[13:21])
-        visual = list(unpacked[21:29])
-        end_laps = list(unpacked[29:37])
+    def from_bytes(cls, data: bytes, offset: int = 0) -> "FinalClassificationData":
+        unpacked = FINAL_CLASSIFICATION_STRUCT.unpack_from(data, offset)
+        actual = list(unpacked[12:20])
+        visual = list(unpacked[20:28])
+        end_laps = list(unpacked[28:36])
         return cls(
             m_position=unpacked[0],
             m_numLaps=unpacked[1],
@@ -1328,7 +1570,8 @@ class FinalClassificationData:
 
     @property
     def finished(self) -> bool:
-        return self.m_resultStatus == ResultStatus.FINISHED
+        # 3 = finished in the spec
+        return self.m_resultStatus == 3
 
 
 @dataclass
@@ -1342,18 +1585,17 @@ class PacketFinalClassificationData:
         header = PacketHeader.from_bytes(data)
         offset = HEADER_SIZE
 
-        num_cars = data[offset]
+        m_numCars = data[offset]
         offset += 1
 
-        classifications = []
+        classifications: list[FinalClassificationData] = []
         for _ in range(MAX_CARS):
-            classifications.append(FinalClassificationData.from_bytes(
-                data[offset:offset + FINAL_CLASSIFICATION_SIZE]))
+            classifications.append(FinalClassificationData.from_bytes(data, offset))
             offset += FINAL_CLASSIFICATION_SIZE
 
         return cls(
             header=header,
-            m_numCars=num_cars,
+            m_numCars=m_numCars,
             m_classificationData=classifications,
         )
 
@@ -1365,9 +1607,9 @@ class PacketFinalClassificationData:
 # Packet 9: Lobby Info
 # ------------------------------------------------------------
 
-LOBBY_INFO_FORMAT = "<BBBB 32s BBB H B"
+LOBBY_INFO_FORMAT = "<BBBB32sBBBHB"
 LOBBY_INFO_STRUCT = struct.Struct(LOBBY_INFO_FORMAT)
-LOBBY_INFO_SIZE = LOBBY_INFO_STRUCT.size  # 44 bytes
+LOBBY_INFO_SIZE = LOBBY_INFO_STRUCT.size  # 42 bytes
 
 
 @dataclass
@@ -1384,9 +1626,9 @@ class LobbyInfoData:
     m_readyStatus: int
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "LobbyInfoData":
-        unpacked = LOBBY_INFO_STRUCT.unpack(data[:LOBBY_INFO_SIZE])
-        name = unpacked[4].decode("utf-8", errors="replace").strip("\x00")
+    def from_bytes(cls, data: bytes, offset: int = 0) -> "LobbyInfoData":
+        unpacked = LOBBY_INFO_STRUCT.unpack_from(data, offset)
+        name = unpacked[4].decode("utf-8", errors="replace").rstrip("\x00")
         return cls(
             m_aiControlled=unpacked[0],
             m_teamId=unpacked[1],
@@ -1421,7 +1663,7 @@ class PacketLobbyInfoData:
 
         players = []
         for _ in range(MAX_CARS):
-            players.append(LobbyInfoData.from_bytes(data[offset:offset + LOBBY_INFO_SIZE]))
+            players.append(LobbyInfoData.from_bytes(data, offset))
             offset += LOBBY_INFO_SIZE
 
         return cls(
@@ -1435,17 +1677,17 @@ class PacketLobbyInfoData:
 # Packet 10: Car Damage
 # ------------------------------------------------------------
 
-CAR_DAMAGE_FORMAT = "<4f 4B 4B 4B BBBB BB BB BBBB BBBB BB"
+CAR_DAMAGE_FORMAT = "<4f4B4B4B" + "18B"
 CAR_DAMAGE_STRUCT = struct.Struct(CAR_DAMAGE_FORMAT)
-CAR_DAMAGE_SIZE = CAR_DAMAGE_STRUCT.size  # 57 bytes
+CAR_DAMAGE_SIZE = CAR_DAMAGE_STRUCT.size  # 46 bytes
 
 
 @dataclass
 class CarDamageData:
-    m_tyresWear: tuple[float, float, float, float]
-    m_tyresDamage: tuple[int, int, int, int]
-    m_brakesDamage: tuple[int, int, int, int]
-    m_tyreBlisters: tuple[int, int, int, int]
+    m_tyresWear: list[float]
+    m_tyresDamage: list[int]
+    m_brakesDamage: list[int]
+    m_tyreBlisters: list[int]
     m_frontLeftWingDamage: int
     m_frontRightWingDamage: int
     m_rearWingDamage: int
@@ -1466,31 +1708,38 @@ class CarDamageData:
     m_engineSeized: int
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "CarDamageData":
-        unpacked = CAR_DAMAGE_STRUCT.unpack(data[:CAR_DAMAGE_SIZE])
+    def from_bytes(cls, data: bytes, offset: int = 0) -> "CarDamageData":
+        unpacked = CAR_DAMAGE_STRUCT.unpack_from(data, offset)
+
+        tyres_wear      = list(unpacked[0:4])
+        tyres_damage    = list(unpacked[4:8])
+        brakes_damage   = list(unpacked[8:12])
+        tyre_blisters   = list(unpacked[12:16])
+        rest            = list(unpacked[16:])
+
         return cls(
-            m_tyresWear=tuple(unpacked[0:4]),
-            m_tyresDamage=tuple(unpacked[4:8]),
-            m_brakesDamage=tuple(unpacked[8:12]),
-            m_tyreBlisters=tuple(unpacked[12:16]),
-            m_frontLeftWingDamage=unpacked[16],
-            m_frontRightWingDamage=unpacked[17],
-            m_rearWingDamage=unpacked[18],
-            m_floorDamage=unpacked[19],
-            m_diffuserDamage=unpacked[20],
-            m_sidepodDamage=unpacked[21],
-            m_drsFault=unpacked[22],
-            m_ersFault=unpacked[23],
-            m_gearBoxDamage=unpacked[24],
-            m_engineDamage=unpacked[25],
-            m_engineMGUHWear=unpacked[26],
-            m_engineESWear=unpacked[27],
-            m_engineCEWear=unpacked[28],
-            m_engineICEWear=unpacked[29],
-            m_engineMGUKWear=unpacked[30],
-            m_engineTCWear=unpacked[31],
-            m_engineBlown=unpacked[32],
-            m_engineSeized=unpacked[33],
+            m_tyresWear=tyres_wear,
+            m_tyresDamage=tyres_damage,
+            m_brakesDamage=brakes_damage,
+            m_tyreBlisters=tyre_blisters,
+            m_frontLeftWingDamage=rest[0],
+            m_frontRightWingDamage=rest[1],
+            m_rearWingDamage=rest[2],
+            m_floorDamage=rest[3],
+            m_diffuserDamage=rest[4],
+            m_sidepodDamage=rest[5],
+            m_drsFault=rest[6],
+            m_ersFault=rest[7],
+            m_gearBoxDamage=rest[8],
+            m_engineDamage=rest[9],
+            m_engineMGUHWear=rest[10],
+            m_engineESWear=rest[11],
+            m_engineCEWear=rest[12],
+            m_engineICEWear=rest[13],
+            m_engineMGUKWear=rest[14],
+            m_engineTCWear=rest[15],
+            m_engineBlown=rest[16],
+            m_engineSeized=rest[17],
         )
 
     @property
@@ -1520,12 +1769,15 @@ class PacketCarDamageData:
         header = PacketHeader.from_bytes(data)
         offset = HEADER_SIZE
 
-        damages = []
+        cars: list[CarDamageData] = []
         for _ in range(MAX_CARS):
-            damages.append(CarDamageData.from_bytes(data[offset:offset + CAR_DAMAGE_SIZE]))
+            cars.append(CarDamageData.from_bytes(data, offset))
             offset += CAR_DAMAGE_SIZE
 
-        return cls(header=header, m_carDamageData=damages)
+        return cls(
+            header=header,
+            m_carDamageData=cars,
+        )
 
     def get_player_damage(self) -> CarDamageData:
         return self.m_carDamageData[self.header.m_playerCarIndex]
@@ -1551,9 +1803,9 @@ class PacketCarDamageData:
 # Packet 11: Session History
 # ------------------------------------------------------------
 
-LAP_HISTORY_FORMAT = "<I HB HB HB B"
+LAP_HISTORY_FORMAT = "<IHBHBHBB"
 LAP_HISTORY_STRUCT = struct.Struct(LAP_HISTORY_FORMAT)
-LAP_HISTORY_SIZE = LAP_HISTORY_STRUCT.size  # 16 bytes
+LAP_HISTORY_SIZE = LAP_HISTORY_STRUCT.size  # 14 bytes
 
 TYRE_STINT_HISTORY_FORMAT = "<BBB"
 TYRE_STINT_HISTORY_STRUCT = struct.Struct(TYRE_STINT_HISTORY_FORMAT)
@@ -1575,8 +1827,8 @@ class LapHistoryData:
     m_lapValidBitFlags: int
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "LapHistoryData":
-        unpacked = LAP_HISTORY_STRUCT.unpack(data[:LAP_HISTORY_SIZE])
+    def from_bytes(cls, data: bytes, offset: int = 0) -> "LapHistoryData":
+        unpacked = LAP_HISTORY_STRUCT.unpack_from(data, offset)
         return cls(*unpacked)
 
     @property
@@ -1607,8 +1859,8 @@ class TyreStintHistoryData:
     m_tyreVisualCompound: int
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "TyreStintHistoryData":
-        unpacked = TYRE_STINT_HISTORY_STRUCT.unpack(data[:TYRE_STINT_HISTORY_SIZE])
+    def from_bytes(cls, data: bytes, offset: int = 0) -> "TyreStintHistoryData":
+        unpacked = TYRE_STINT_HISTORY_STRUCT.unpack_from(data, offset)
         return cls(*unpacked)
 
 
@@ -1630,35 +1882,38 @@ class PacketSessionHistoryData:
         header = PacketHeader.from_bytes(data)
         offset = HEADER_SIZE
 
-        basic = struct.unpack_from("<BBBBBBBB", data, offset)
-        offset += 8
+        (
+            carIdx,
+            numLaps,
+            numTyreStints,
+            bestLap,
+            bestS1,
+            bestS2,
+            bestS3,
+        ) = struct.unpack_from("<BBBBBBB", data, offset)
+        offset += 7
 
-        lap_history = []
-        for i in range(MAX_LAP_HISTORY):
-            if i < basic[1]:  # numLaps
-                lap_history.append(LapHistoryData.from_bytes(data[offset:offset + LAP_HISTORY_SIZE]))
-            else:
-                lap_history.append(LapHistoryData(0, 0, 0, 0, 0, 0, 0, 0))
+        # Lap history (100 entries)
+        lap_history: list[LapHistoryData] = []
+        for _ in range(100):
+            lap_history.append(LapHistoryData.from_bytes(data, offset))
             offset += LAP_HISTORY_SIZE
 
-        tyre_stints = []
-        for i in range(MAX_TYRE_STINTS):
-            if i < basic[2]:  # numTyreStints
-                tyre_stints.append(TyreStintHistoryData.from_bytes(
-                    data[offset:offset + TYRE_STINT_HISTORY_SIZE]))
-            else:
-                tyre_stints.append(TyreStintHistoryData(255, 0, 0))
+        # Tyre stints (8 entries)
+        tyre_stints: list[TyreStintHistoryData] = []
+        for _ in range(8):
+            tyre_stints.append(TyreStintHistoryData.from_bytes(data, offset))
             offset += TYRE_STINT_HISTORY_SIZE
 
         return cls(
             header=header,
-            m_carIdx=basic[0],
-            m_numLaps=basic[1],
-            m_numTyreStints=basic[2],
-            m_bestLapTimeLapNum=basic[3],
-            m_bestSector1LapNum=basic[4],
-            m_bestSector2LapNum=basic[5],
-            m_bestSector3LapNum=basic[6],
+            m_carIdx=carIdx,
+            m_numLaps=numLaps,
+            m_numTyreStints=numTyreStints,
+            m_bestLapTimeLapNum=bestLap,
+            m_bestSector1LapNum=bestS1,
+            m_bestSector2LapNum=bestS2,
+            m_bestSector3LapNum=bestS3,
             m_lapHistoryData=lap_history,
             m_tyreStintsHistoryData=tyre_stints,
         )
@@ -1668,7 +1923,7 @@ class PacketSessionHistoryData:
 # Packet 12: Tyre Sets
 # ------------------------------------------------------------
 
-TYRE_SET_FORMAT = "<BB BB BB B h B"
+TYRE_SET_FORMAT = "<BBBBBBBhB"
 TYRE_SET_STRUCT = struct.Struct(TYRE_SET_FORMAT)
 TYRE_SET_SIZE = TYRE_SET_STRUCT.size  # 10 bytes
 
@@ -1688,8 +1943,8 @@ class TyreSetData:
     m_fitted: int
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "TyreSetData":
-        unpacked = TYRE_SET_STRUCT.unpack(data[:TYRE_SET_SIZE])
+    def from_bytes(cls, data: bytes, offset: int = 0) -> "TyreSetData":
+        unpacked = TYRE_SET_STRUCT.unpack_from(data, offset)
         return cls(*unpacked)
 
     @property
@@ -1713,21 +1968,21 @@ class PacketTyreSetsData:
         header = PacketHeader.from_bytes(data)
         offset = HEADER_SIZE
 
-        car_idx = data[offset]
+        carIdx = data[offset]
         offset += 1
 
-        tyre_sets = []
-        for _ in range(MAX_TYRE_SETS):
-            tyre_sets.append(TyreSetData.from_bytes(data[offset:offset + TYRE_SET_SIZE]))
+        tyre_sets: list[TyreSetData] = []
+        for _ in range(20):
+            tyre_sets.append(TyreSetData.from_bytes(data, offset))
             offset += TYRE_SET_SIZE
 
-        fitted_idx = data[offset]
+        fittedIdx = data[offset]
 
         return cls(
             header=header,
-            m_carIdx=car_idx,
+            m_carIdx=carIdx,
             m_tyreSetData=tyre_sets,
-            m_fittedIdx=fitted_idx,
+            m_fittedIdx=fittedIdx,
         )
 
     def get_fitted_tyre(self) -> TyreSetData:
@@ -1737,94 +1992,110 @@ class PacketTyreSetsData:
 # ------------------------------------------------------------
 # Packet 13: Motion Ex
 # ------------------------------------------------------------
+# Packet 13: Motion Ex
+# ------------------------------------------------------------
 
-MOTION_EX_FORMAT = "<" + "f" * 62
+# 11 arrays of 4 floats = 44 floats
+# 17 single floats
+# Total = 61 floats
+
+MOTION_EX_FORMAT = "<" + ("f" * 61)
 MOTION_EX_STRUCT = struct.Struct(MOTION_EX_FORMAT)
-MOTION_EX_SIZE = MOTION_EX_STRUCT.size  # 273 bytes
+MOTION_EX_SIZE = MOTION_EX_STRUCT.size  # 244 bytes
 
 
 @dataclass
 class PacketMotionExData:
     header: PacketHeader
-    m_suspensionPosition: tuple[float, float, float, float]
-    m_suspensionVelocity: tuple[float, float, float, float]
-    m_suspensionAcceleration: tuple[float, float, float, float]
-    m_wheelSpeed: tuple[float, float, float, float]
-    m_wheelSlipRatio: tuple[float, float, float, float]
-    m_wheelSlipAngle: tuple[float, float, float, float]
-    m_wheelLatForce: tuple[float, float, float, float]
-    m_wheelLongForce: tuple[float, float, float, float]
+
+    m_suspensionPosition: list[float]
+    m_suspensionVelocity: list[float]
+    m_suspensionAcceleration: list[float]
+    m_wheelSpeed: list[float]
+    m_wheelSlipRatio: list[float]
+    m_wheelSlipAngle: list[float]
+    m_wheelLatForce: list[float]
+    m_wheelLongForce: list[float]
+
     m_heightOfCOGAboveGround: float
     m_localVelocityX: float
     m_localVelocityY: float
     m_localVelocityZ: float
+
     m_angularVelocityX: float
     m_angularVelocityY: float
     m_angularVelocityZ: float
+
     m_angularAccelerationX: float
     m_angularAccelerationY: float
     m_angularAccelerationZ: float
+
     m_frontWheelsAngle: float
-    m_wheelVertForce: tuple[float, float, float, float]
+
+    m_wheelVertForce: list[float]
+
     m_frontAeroHeight: float
     m_rearAeroHeight: float
     m_frontRollAngle: float
     m_rearRollAngle: float
     m_chassisYaw: float
     m_chassisPitch: float
-    m_wheelCamber: tuple[float, float, float, float]
-    m_wheelCamberGain: tuple[float, float, float, float]
+
+    m_wheelCamber: list[float]
+    m_wheelCamberGain: list[float]
 
     @classmethod
     def from_bytes(cls, data: bytes) -> "PacketMotionExData":
         header = PacketHeader.from_bytes(data)
         offset = HEADER_SIZE
 
-        unpacked = list(MOTION_EX_STRUCT.unpack(data[offset:offset + MOTION_EX_SIZE]))
+        unpacked = MOTION_EX_STRUCT.unpack_from(data, offset)
+        i = 0
 
-        def get_floats(n: int) -> tuple[float, ...]:
-            return tuple(unpacked[:n])
-
-        pos = tuple(unpacked[0:4])
-        vel = tuple(unpacked[4:8])
-        acc = tuple(unpacked[8:12])
-        speed = tuple(unpacked[12:16])
-        slip_ratio = tuple(unpacked[16:20])
-        slip_angle = tuple(unpacked[20:24])
-        lat_force = tuple(unpacked[24:28])
-        long_force = tuple(unpacked[28:32])
-        vert_force = tuple(unpacked[32:36])
+        def take(n: int) -> list[float]:
+            nonlocal i
+            vals = unpacked[i:i+n]
+            i += n
+            return list(vals)
 
         return cls(
             header=header,
-            m_suspensionPosition=pos,
-            m_suspensionVelocity=vel,
-            m_suspensionAcceleration=acc,
-            m_wheelSpeed=speed,
-            m_wheelSlipRatio=slip_ratio,
-            m_wheelSlipAngle=slip_angle,
-            m_wheelLatForce=lat_force,
-            m_wheelLongForce=long_force,
-            m_heightOfCOGAboveGround=unpacked[36],
-            m_localVelocityX=unpacked[37],
-            m_localVelocityY=unpacked[38],
-            m_localVelocityZ=unpacked[39],
-            m_angularVelocityX=unpacked[40],
-            m_angularVelocityY=unpacked[41],
-            m_angularVelocityZ=unpacked[42],
-            m_angularAccelerationX=unpacked[43],
-            m_angularAccelerationY=unpacked[44],
-            m_angularAccelerationZ=unpacked[45],
-            m_frontWheelsAngle=unpacked[46],
-            m_wheelVertForce=vert_force,
-            m_frontAeroHeight=unpacked[47],
-            m_rearAeroHeight=unpacked[48],
-            m_frontRollAngle=unpacked[49],
-            m_rearRollAngle=unpacked[50],
-            m_chassisYaw=unpacked[51],
-            m_chassisPitch=unpacked[52],
-            m_wheelCamber=tuple(unpacked[53:57]),
-            m_wheelCamberGain=tuple(unpacked[57:61]),
+
+            m_suspensionPosition=take(4),
+            m_suspensionVelocity=take(4),
+            m_suspensionAcceleration=take(4),
+            m_wheelSpeed=take(4),
+            m_wheelSlipRatio=take(4),
+            m_wheelSlipAngle=take(4),
+            m_wheelLatForce=take(4),
+            m_wheelLongForce=take(4),
+
+            m_heightOfCOGAboveGround=take(1)[0],
+            m_localVelocityX=take(1)[0],
+            m_localVelocityY=take(1)[0],
+            m_localVelocityZ=take(1)[0],
+
+            m_angularVelocityX=take(1)[0],
+            m_angularVelocityY=take(1)[0],
+            m_angularVelocityZ=take(1)[0],
+
+            m_angularAccelerationX=take(1)[0],
+            m_angularAccelerationY=take(1)[0],
+            m_angularAccelerationZ=take(1)[0],
+
+            m_frontWheelsAngle=take(1)[0],
+
+            m_wheelVertForce=take(4),
+
+            m_frontAeroHeight=take(1)[0],
+            m_rearAeroHeight=take(1)[0],
+            m_frontRollAngle=take(1)[0],
+            m_rearRollAngle=take(1)[0],
+            m_chassisYaw=take(1)[0],
+            m_chassisPitch=take(1)[0],
+
+            m_wheelCamber=take(4),
+            m_wheelCamberGain=take(4),
         )
 
 
@@ -1832,9 +2103,9 @@ class PacketMotionExData:
 # Packet 14: Time Trial
 # ------------------------------------------------------------
 
-TIME_TRIAL_DATASET_FORMAT = "<BB I III BBBB BB"
+TIME_TRIAL_DATASET_FORMAT = "<BBIIII BBBBBB"
 TIME_TRIAL_DATASET_STRUCT = struct.Struct(TIME_TRIAL_DATASET_FORMAT)
-TIME_TRIAL_DATASET_SIZE = TIME_TRIAL_DATASET_STRUCT.size  # 22 bytes
+TIME_TRIAL_DATASET_SIZE = TIME_TRIAL_DATASET_STRUCT.size  # 24 bytes
 
 
 @dataclass
@@ -1847,14 +2118,14 @@ class TimeTrialDataSet:
     m_sector3TimeInMS: int
     m_tractionControl: int
     m_gearboxAssist: int
-    m_antiLockBrakes: int
+    m_antilockBrakes: int
     m_equalCarPerformance: int
     m_customSetup: int
     m_valid: int
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "TimeTrialDataSet":
-        unpacked = TIME_TRIAL_DATASET_STRUCT.unpack(data[:TIME_TRIAL_DATASET_SIZE])
+    def from_bytes(cls, data: bytes, offset: int) -> "TimeTrialDataSet":
+        unpacked = TIME_TRIAL_DATASET_STRUCT.unpack_from(data, offset)
         return cls(*unpacked)
 
     @property
@@ -1874,13 +2145,13 @@ class PacketTimeTrialData:
         header = PacketHeader.from_bytes(data)
         offset = HEADER_SIZE
 
-        player_best = TimeTrialDataSet.from_bytes(data[offset:offset + TIME_TRIAL_DATASET_SIZE])
+        player_best = TimeTrialDataSet.from_bytes(data, offset)
         offset += TIME_TRIAL_DATASET_SIZE
 
-        personal_best = TimeTrialDataSet.from_bytes(data[offset:offset + TIME_TRIAL_DATASET_SIZE])
+        personal_best = TimeTrialDataSet.from_bytes(data, offset)
         offset += TIME_TRIAL_DATASET_SIZE
 
-        rival = TimeTrialDataSet.from_bytes(data[offset:offset + TIME_TRIAL_DATASET_SIZE])
+        rival = TimeTrialDataSet.from_bytes(data, offset)
 
         return cls(
             header=header,

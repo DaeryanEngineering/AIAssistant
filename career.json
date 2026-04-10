@@ -4,5 +4,7 @@
   "warmth": 0,
   "consecutive_titles": 0,
   "total_titles": 0,
-  "first_f1_title_year": null
+  "first_f1_title_year": null,
+  "teammate_name": null,
+  "maxed_rnd_categories": []
 }

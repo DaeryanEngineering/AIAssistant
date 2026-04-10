@@ -44,6 +44,8 @@ class PitBehavior:
         # -----------------------------------------------------
         # PIT LANE DETECTION
         # -----------------------------------------------------
+        if lap_data is None:
+            return
         in_pit_lane = bool(lap_data.m_pitLaneTimeInLaneInMS > 0)
 
         if in_pit_lane and not self.last_in_pit_lane:
@@ -78,6 +80,9 @@ class PitBehavior:
 
         if pit_mode == 2 and self.last_pit_mode != 2:
             self._emit(EventType.PIT_EXIT_LINE)
+
+        if status is None:
+            return
 
         # -----------------------------------------------------
         # PIT LIMITER REMINDER

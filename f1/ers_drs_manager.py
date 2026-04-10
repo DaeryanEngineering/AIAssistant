@@ -59,6 +59,7 @@ class ERSDRSManager:
         self._pit_extended = False
         self._emergency_pit = False
         self._emergency_reason = None
+        self._last_pit_call_lap = None  # Track lap of last pit call to prevent spam
         self._last_lap_announced = False
 
         # Weather tracking
@@ -78,6 +79,15 @@ class ERSDRSManager:
         self._last_ers_press = 0
         self._drs_cooldown = 2.0  # Minimum seconds between DRS activations
         self._ers_cooldown = 3.0  # Minimum seconds between ERS announcements
+
+        # ERS burst timing
+        self._ers_burst_active = False
+        self._ers_burst_end_time = 0.0
+
+        # Debug tracking
+        self._debug_last_recommended_ers = None
+        self._debug_last_drs_allowed = None
+        self._debug_last_drs_zone = None
 
     # ---------------------------------------------------------
     # PUBLIC API
@@ -117,7 +127,7 @@ class ERSDRSManager:
         def _run_loop():
             while True:
                 self.update()
-                time.sleep(0.05)
+                time.sleep(0.1)  # 10Hz - less CPU, still responsive for ERS/DRS
 
         t = threading.Thread(target=_run_loop, daemon=True, name="ERSDRSThread")
         t.start()
@@ -128,8 +138,93 @@ class ERSDRSManager:
 
     def update(self):
         """Called every telemetry tick."""
+        # Get telemetry data for ERS/DRS calculations
+        status = self.telemetry.car_status
+        telemetry = self.telemetry.car_telemetry
+        session = self.telemetry.session
+        lap_data = self.telemetry.lap_data
+
+        game_ers = None
+        saul_ers = None
+        recommended_ers = None
+        drs_allowed = False
+        drs_zone = False
+        battery_pct = 0
+        current_mode = 0
+
+        if status and telemetry and session:
+            try:
+                player_status = status.get_player_status()
+                player_telemetry = telemetry.get_player_telemetry()
+                
+                if player_status and player_telemetry:
+                    current_mode = player_status.m_ersDeployMode
+                    self.keyboard.sync_ers_mode(player_status.m_ersDeployMode)
+                    
+                    # Get values for debug
+                    game_ers = player_status.m_ersDeployMode
+                    saul_ers = self.keyboard.current_ers_mode
+                    
+                    # Calculate recommended ERS
+                    battery = player_status.m_ersStoreEnergy
+                    battery_pct = (battery / 4000000.0) * 100.0
+                    is_last_lap = self._is_last_lap(session, lap_data)
+                    under_sc = self._is_under_safety_car(session)
+                    on_straight = self._is_on_straight(player_telemetry)
+                    
+                    # Calculate recommended ERS mode
+                    if self._ers_automation_paused:
+                        recommended_ers = None
+                    elif is_last_lap:
+                        recommended_ers = self.ERS_OVERTAKE
+                    elif battery_pct < 15:
+                        recommended_ers = self.ERS_NONE
+                    elif under_sc:
+                        recommended_ers = self.ERS_NONE
+                    elif battery_pct > 50 and not under_sc:
+                        recommended_ers = self.ERS_MEDIUM
+                    elif self._is_quali(session) and on_straight:
+                        recommended_ers = self.ERS_HOTLAP
+                    elif self._is_defending() and on_straight:
+                        recommended_ers = self.ERS_OVERTAKE
+                    elif self._is_closing_gap() and on_straight:
+                        recommended_ers = self.ERS_OVERTAKE
+                    elif on_straight and battery_pct > 30:
+                        # HOTLAP burst on straights even when not in combat
+                        now = time.time()
+                        if self._ers_burst_active:
+                            if now < self._ers_burst_end_time:
+                                recommended_ers = self.ERS_HOTLAP
+                            else:
+                                self._ers_burst_active = False
+                        if recommended_ers != self.ERS_HOTLAP:
+                            self._ers_burst_active = True
+                            self._ers_burst_end_time = now + 0.45  # 450ms burst
+                            recommended_ers = self.ERS_HOTLAP
+                    else:
+                        recommended_ers = None  # No recommendation
+                    
+                    # DRS status
+                    drs_allowed = player_status.m_drsAllowed == 1
+                    drs_activation_dist = player_status.m_drsActivationDistance > 0
+                    drs_zone = drs_allowed and drs_activation_dist and on_straight and not under_sc
+                    
+                    # Debug print only on significant changes (every 5 sec max)
+                    now = time.time()
+                    if (recommended_ers != self._debug_last_recommended_ers or 
+                        drs_allowed != self._debug_last_drs_allowed or
+                        drs_zone != self._debug_last_drs_zone):
+                        if now - self._last_drs_press > 5:
+                            print(f"[ERS/DRS] Game={game_ers} Saul={saul_ers} Rec={recommended_ers} | "
+                                  f"Batt={battery_pct:.0f}% | DRS={drs_allowed}/zone={drs_zone}")
+                        self._debug_last_recommended_ers = recommended_ers
+                        self._debug_last_drs_allowed = drs_allowed
+                        self._debug_last_drs_zone = drs_zone
+            except Exception:
+                pass
+
         self._handle_drs()
-        self._handle_ers()
+        self._handle_ers(recommended_ers, battery_pct, current_mode)
         self._handle_pit_window()
         self._handle_weather_updates()
         self._handle_last_lap()
@@ -151,16 +246,18 @@ class ERSDRSManager:
         player_telemetry = telemetry.get_player_telemetry()
 
         drs_allowed = player_status.m_drsAllowed == 1
-        drs_activation_dist = player_status.m_drsActivationDistance > 0
-        on_straight = self._is_on_straight(player_telemetry)
+        drs_activation_dist = player_status.m_drsActivationDistance
+        on_straight, steer, throttle, speed = self._is_on_straight(player_telemetry, get_values=True)
         under_safety_car = self._is_under_safety_car(session)
+        sc_status = session.m_safetyCarStatus
 
         now = time.time()
-        in_drs_zone = drs_allowed and drs_activation_dist and on_straight and not under_safety_car
+        in_drs_zone = drs_allowed and drs_activation_dist > 0 and on_straight and not under_safety_car
 
         # Debounce: don't spam DRS presses
         if in_drs_zone and not self._last_drs_zone:
             if now - self._last_drs_press > self._drs_cooldown:
+                print("[DRS] *** PRESSING DRS ***")
                 self.keyboard.press_drs()
                 self._last_drs_press = now
                 self.engineer._say("DRS now.")
@@ -171,83 +268,21 @@ class ERSDRSManager:
     # ERS CONTEXT LOGIC
     # ---------------------------------------------------------
 
-    def _handle_ers(self):
+    def _handle_ers(self, recommended_ers, battery_pct, current_mode):
         """Context-aware ERS deployment."""
         if self._ers_automation_paused:
             return
 
-        status = self.telemetry.car_status
-        telemetry = self.telemetry.car_telemetry
-        session = self.telemetry.session
-        lap_data = self.telemetry.lap_data
-
-        if not status or not telemetry or not session:
+        if recommended_ers is None:
             return
 
-        player_status = status.get_player_status()
-        player_telemetry = telemetry.get_player_telemetry()
+        # Apply the recommended mode
+        if recommended_ers != current_mode:
+            self.keyboard.cycle_ers_to(recommended_ers)
 
-        battery = player_status.m_ersStoreEnergy
-        battery_pct = (battery / 4000000.0) * 100.0  # Max ERS is 4MJ
-        current_mode = player_status.m_ersDeployMode
-        on_straight = self._is_on_straight(player_telemetry)
-        under_safety_car = self._is_under_safety_car(session)
-        is_last_lap = self._is_last_lap(session, lap_data)
-
-        now = time.time()
-
-        # Last lap: dump battery
-        if is_last_lap and not self._last_lap_announced:
-            self._last_lap_announced = True
-            if battery_pct > 5:
-                self.keyboard.cycle_ers_to(self.ERS_OVERTAKE)
-                self.engineer._say("Last lap. Empty the battery.")
-            return
-
-        # Battery < 15%: shut off
-        if battery_pct < 15 and current_mode != self.ERS_NONE:
-            if now - self._last_ers_announcement > self._ers_cooldown:
-                self.keyboard.cycle_ers_to(self.ERS_NONE)
-                self._last_ers_announcement = now
-                self.engineer._say("Battery low. Save ERS.")
-            return
-
-        # Battery > 50%: switch to medium to recharge
-        if battery_pct > 50 and current_mode != self.ERS_MEDIUM and not under_safety_car:
-            if now - self._last_ers_announcement > self._ers_cooldown:
-                self.keyboard.cycle_ers_to(self.ERS_MEDIUM)
-                self._last_ers_announcement = now
-                self.engineer._say("Recharge the battery. Switching to medium.")
-            return
-
-        # Under safety car: turn off
-        if under_safety_car and current_mode != self.ERS_NONE:
+        # PRIORITY 9: Fallback → OFF
+        if current_mode != self.ERS_NONE:
             self.keyboard.cycle_ers_to(self.ERS_NONE)
-            return
-
-        # Quali flying lap on straight: hotlap
-        if self._is_quali(session) and on_straight and current_mode != self.ERS_HOTLAP:
-            if now - self._last_ers_announcement > self._ers_cooldown:
-                self.keyboard.cycle_ers_to(self.ERS_HOTLAP)
-                self._last_ers_announcement = now
-                self.engineer._say("ERS hotlap. Give it everything.")
-            return
-
-        # Defending: car behind within 0.5s on straight
-        if self._is_defending() and on_straight and current_mode != self.ERS_OVERTAKE:
-            if now - self._last_ers_announcement > self._ers_cooldown:
-                self.keyboard.cycle_ers_to(self.ERS_OVERTAKE)
-                self._last_ers_announcement = now
-                self.engineer._say("Defend. Deploy ERS.")
-            return
-
-        # Closing gap on straight
-        if self._is_closing_gap() and on_straight and current_mode != self.ERS_OVERTAKE:
-            if now - self._last_ers_announcement > self._ers_cooldown:
-                self.keyboard.cycle_ers_to(self.ERS_OVERTAKE)
-                self._last_ers_announcement = now
-                self.engineer._say("Deploy ERS. Push.")
-            return
 
     # ---------------------------------------------------------
     # PIT WINDOW TRACKING
@@ -261,6 +296,10 @@ class ERSDRSManager:
         if not session or not lap_data:
             return
 
+        # Only track pit window for race sessions (type 11 or 15)
+        if session.m_sessionType not in (11, 15):
+            return
+
         player_lap = lap_data.get_player_lap_data()
         current_lap = player_lap.m_currentLapNum
         current_sector = player_lap.m_sector
@@ -268,7 +307,8 @@ class ERSDRSManager:
         ideal_lap = session.m_pitStopWindowIdealLap
         latest_lap = session.m_pitStopWindowLatestLap
 
-        if ideal_lap == 0:
+        # Don't call pit window if ideal_lap is 0 (not set) or if we're on lap 1-2
+        if ideal_lap == 0 or current_lap <= 2:
             return
 
         # Start of in-lap
@@ -309,18 +349,52 @@ class ERSDRSManager:
     # ---------------------------------------------------------
 
     def _handle_weather_updates(self):
-        """Proactive weather announcements."""
+        """Proactive weather announcements (Saul‑safe version)."""
         session = self.telemetry.session
         status = self.telemetry.car_status
+        lap_data = self.telemetry.lap_data
 
         if not session or not status:
             return
 
         player_status = status.get_player_status()
         current_compound = player_status.m_actualTyreCompound
-        rain_pct = session.m_weatherForecastSamples[0].m_rainPercentage if session.m_weatherForecastSamples else 0
 
-        # Track rain trend
+        # --- REAL WEATHER SIGNALS ---
+        rain_pct = session.m_weatherForecastSamples[0].m_rainPercentage if session.m_weatherForecastSamples else 0
+        wetness = self.telemetry.track_wetness
+        rain_in_minutes = self._get_rain_eta(session)
+
+        # --- SAFETY GATES -------------------------------------------------------
+
+        now = time.time()
+
+        # Gate 1: Never speak more than once per minute
+        if now - self._last_weather_announcement < 60:
+            return
+
+        # Gate 2: Never make pit decisions in the first 2 laps of the race
+        if lap_data:
+            player_lap = lap_data.get_player_lap_data()
+            current_lap = getattr(player_lap, 'm_currentLapNum', 0)
+            if current_lap <= 2:
+                return
+        else:
+            current_lap = 0
+
+        # Gate 3: Never react to rain % unless the track is actually wet
+        track_is_dry = wetness < 10
+
+        # Gate 4: Never make multiple pit calls on the same lap
+        # Reset emergency flag when lap changes or damage is fixed
+        if self._last_pit_call_lap is not None and self._last_pit_call_lap != current_lap:
+            self._emergency_pit = False
+            self._emergency_reason = None
+
+        if self._last_pit_call_lap == current_lap and current_lap > 0:
+            return
+
+        # --- RAIN TREND ---------------------------------------------------------
         if self._last_rain_pct is not None:
             if rain_pct > self._last_rain_pct + 10:
                 self._rain_trend = "increasing"
@@ -329,60 +403,60 @@ class ERSDRSManager:
 
         self._last_rain_pct = rain_pct
 
-        # Check forecast for rain timing
-        rain_in_minutes = self._get_rain_eta(session)
+        # --- FORECAST ANNOUNCEMENTS --------------------------------------------
 
-        now = time.time()
-        if now - self._last_weather_announcement < 60:  # Max 1 weather update per minute
-            return
-
-        # Rain in 10-15 minutes
+        # Light rain expected later (10–15 min)
         if rain_in_minutes and 10 <= rain_in_minutes <= 15:
             if self._is_on_slicks(current_compound):
                 self._last_weather_announcement = now
                 self.engineer._say(
-                    f"We're expecting rain in the next {rain_in_minutes} minutes, Shawn. "
-                    f"Slicks are still the right tire for now."
+                    f"Rain expected in about {rain_in_minutes} minutes, Shawn. "
+                    f"Slicks are still the right call."
                 )
             return
 
-        # Rain imminent (5 min)
+        # Rain approaching (5–10 min)
         if rain_in_minutes and 5 <= rain_in_minutes < 10:
             if self._is_on_slicks(current_compound):
                 self._last_weather_announcement = now
                 self.engineer._say(
-                    f"Rain's about to hit, Shawn. Start thinking about inters."
+                    "Rain incoming soon. Keep an eye on grip, Shawn."
                 )
             return
 
-        # Rain starting + on slicks → emergency pit
-        if rain_pct > 40 and self._is_on_slicks(current_compound):
-            if not self._emergency_pit:
-                self._emergency_pit = True
-                self._emergency_reason = "rain"
-                self._pending_pit_call = "Box for inters"
-                self._pending_tire_compound = 3  # Inter index
-                self._last_weather_announcement = now
-                self.engineer._say(
-                    "Rain's getting harder. Box for inters, Shawn. Confirm?"
-                )
+        # --- EMERGENCY PIT LOGIC ------------------------------------------------
+
+        # Rain starting (<5 min) → ONLY if track is actually wet
+        if rain_in_minutes and rain_in_minutes < 5:
+            if not track_is_dry and self._is_on_slicks(current_compound):
+                if not self._emergency_pit:
+                    self._emergency_pit = True
+                    self._emergency_reason = "rain"
+                    self._pending_pit_call = "Box for inters"
+                    self._pending_tire_compound = 3
+                    self._last_weather_announcement = now
+                    self._last_pit_call_lap = current_lap
+                    self.engineer._say(
+                        "Rain's starting to hit the track. Box for inters, Shawn. Confirm."
+                    )
             return
 
-        # Heavy rain + on inters → wets
-        if rain_pct > 70 and self._is_on_inters(current_compound):
+        # Heavy rain + on inters → wets (only if wetness supports it)
+        if wetness > 40 and self._is_on_inters(current_compound):
             if not self._emergency_pit:
                 self._emergency_pit = True
                 self._emergency_reason = "heavy_rain"
                 self._pending_pit_call = "Box for wets"
-                self._pending_tire_compound = 4  # Wet index
+                self._pending_tire_compound = 4
                 self._last_weather_announcement = now
+                self._last_pit_call_lap = current_lap
                 self.engineer._say(
-                    "Downpour coming. Box for wets, Shawn. Confirm?"
+                    "Track's getting flooded. Box for wets, Shawn. Confirm."
                 )
             return
 
         # Track drying + on wets
-        if rain_pct < 20 and self._is_on_wets(current_compound) and self._rain_trend == "decreasing":
+        if wetness < 20 and self._is_on_wets(current_compound) and self._rain_trend == "decreasing":
             self._last_weather_announcement = now
             self.engineer._say(
                 "Track's drying out. Window for slicks opening, Shawn."
@@ -390,15 +464,16 @@ class ERSDRSManager:
             return
 
         # Track dry + on inters
-        if rain_pct < 10 and self._is_on_inters(current_compound):
+        if wetness < 10 and self._is_on_inters(current_compound):
             if not self._emergency_pit:
                 self._emergency_pit = True
                 self._emergency_reason = "drying"
                 self._pending_pit_call = "Box for slicks"
                 self._pending_tire_compound = self._get_best_slick_compound()
                 self._last_weather_announcement = now
+                self._last_pit_call_lap = current_lap
                 self.engineer._say(
-                    "Track's dry. Box for slicks, Shawn. Confirm?"
+                    "Track's dry again. Box for slicks, Shawn. Confirm."
                 )
             return
 
@@ -422,22 +497,27 @@ class ERSDRSManager:
     # HELPERS
     # ---------------------------------------------------------
 
-    def _is_on_straight(self, telemetry_data) -> bool:
+    def _is_on_straight(self, telemetry_data, get_values=False):
         """Detect if car is on a straight."""
         if not telemetry_data:
-            return False
+            return (False, 0, 0, 0) if get_values else False
         steer = abs(telemetry_data.m_steer)
         throttle = telemetry_data.m_throttle
         speed = telemetry_data.m_speed
-        return steer < 0.1 and throttle > 0.8 and speed > 200
+        # Lowered threshold from 200 to 150 km/h for more tracks
+        on_straight = steer < 0.15 and throttle > 0.7 and speed > 150
+        if get_values:
+            return (on_straight, steer, throttle, speed)
+        return on_straight
 
     def _is_under_safety_car(self, session) -> bool:
-        """Check if under SC or VSC."""
+        """Check if under SC, VSC, or formation lap."""
         if not session:
             return False
         return session.m_safetyCarStatus in (
             SafetyCarStatus.FULL,
             SafetyCarStatus.VIRTUAL,
+            SafetyCarStatus.FORMATION,
         )
 
     def _is_quali(self, session) -> bool:
@@ -505,6 +585,23 @@ class ERSDRSManager:
             return TyreCompound(compound) == TyreCompound.F1_MODERN_WET
         except ValueError:
             return False
+
+    def _is_damage_emergency(self) -> bool:
+        """Check if there's emergency damage requiring immediate pit."""
+        damage = self.telemetry.car_damage
+        if not damage:
+            return False
+        try:
+            player_damage = damage.get_player_damage()
+            # Front wing damage > 30%
+            if player_damage.m_frontLeftWingDamage > 30 or player_damage.m_frontRightWingDamage > 30:
+                return True
+            # Tyre blisters > 50%
+            if player_damage.m_tyreBlisters and any(b > 50 for b in player_damage.m_tyreBlisters):
+                return True
+        except Exception:
+            pass
+        return False
 
     def _get_rain_eta(self, session) -> Optional[int]:
         """Get minutes until rain from forecast samples."""

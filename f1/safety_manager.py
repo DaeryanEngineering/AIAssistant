@@ -27,30 +27,35 @@ class SafetyManager:
         # SAFETY CAR DEPLOYED
         # -----------------------------------------------------
         if sc_status == 1 and self._prev_sc_status != 1:
+            print("[SAFETY] SAFETY_CAR_DEPLOYED")
             self._emit(EventType.SAFETY_CAR_DEPLOYED)
 
         # -----------------------------------------------------
         # SAFETY CAR IN THIS LAP (rolling restart)
         # -----------------------------------------------------
         if sc_status == 3 and self._prev_sc_status == 1:
+            print("[SAFETY] SAFETY_CAR_IN_THIS_LAP")
             self._emit(EventType.SAFETY_CAR_IN_THIS_LAP)
 
         # -----------------------------------------------------
         # VSC DEPLOYED
         # -----------------------------------------------------
         if sc_status == 2 and self._prev_sc_status != 2:
+            print("[SAFETY] VSC_DEPLOYED")
             self._emit(EventType.VIRTUAL_SAFETY_CAR_DEPLOYED)
 
         # -----------------------------------------------------
         # VSC ENDING
         # -----------------------------------------------------
         if self._prev_sc_status == 2 and sc_status == 0:
+            print("[SAFETY] VSC_END")
             self._emit(EventType.VSC_END)
 
         # -----------------------------------------------------
         # SAFETY CAR END (green flag)
         # -----------------------------------------------------
         if self._prev_sc_status == 1 and sc_status == 0:
+            print("[SAFETY] SAFETY_CAR_END")
             self._emit(EventType.SAFETY_CAR_END)
 
         # -----------------------------------------------------

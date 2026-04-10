@@ -1,6 +1,5 @@
 # telemetry/telemetry_manager.py
 
-import threading
 import time
 
 from udp.udp_listener import UDPListener
@@ -31,7 +30,7 @@ class TelemetryManager:
         self.garage_ui = GarageUIState()
 
         self.car_status_tracker = CarStatusTracker(self.state)
-        self.lap_tracker = LapTracker(self.state)
+        self.lap_tracker = LapTracker(self.state)  # Still used for non-gap events
         self.safety_manager = SafetyManager(self.state)
         self.session_manager = SessionManager(self.state)
         self.race_behavior = RaceBehavior(self.state)
@@ -41,10 +40,8 @@ class TelemetryManager:
         self.pit_behavior = PitBehavior(self.state)
         self.teammate_manager = TeammateManager(self.state)
 
-        self._telemetry_thread = None
-        self._running = False
-
     def update(self):
+        """Called from main loop at 20Hz."""
         raw = self.listener.poll()
         if not raw:
             return
@@ -85,23 +82,6 @@ class TelemetryManager:
                 self.state.car_status.m_carStatusData if self.state.car_status else []
             )
 
-        self.lap_tracker.update()
-
-    def start_threads(self):
-        self._running = True
-
-        def _telemetry_loop():
-            while self._running:
-                self.update()
-                time.sleep(0.05)
-
-        self._telemetry_thread = threading.Thread(
-            target=_telemetry_loop, daemon=True, name="TelemetryThread"
-        )
-        self._telemetry_thread.start()
-
-    def stop_threads(self):
-        self._running = False
-        if self._telemetry_thread:
-            self._telemetry_thread.join(timeout=2)
+        # Remove lap_tracker update - gaps now handled by GapWorker
+        # self.lap_tracker.update()
 

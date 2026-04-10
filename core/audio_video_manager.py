@@ -2,6 +2,7 @@
 
 import threading
 import queue
+import time
 import sounddevice as sd
 import numpy as np
 from .video_player import VLCVideoPlayer
@@ -153,9 +154,13 @@ class AudioVideoManager:
             if animation:
                 self._play_animation_internal(animation)
 
+            # Play audio and wait for it to finish (prevents cutting off)
             sd.play(audio, sr)
-            sd.wait()
+            stream = sd.get_stream()
+            while stream.active:
+                time.sleep(0.01)
 
+            # Return to idle after audio finishes
             if return_to_idle:
                 self._play_animation_internal("idle")
 

@@ -102,27 +102,18 @@ class EngineerBrain:
 
     def handle_strategy_update(self, component: str | None = None, value: int | None = None, **_):
         if component:
-            self.tts_engine.speak(
-                f"We're adjusting your strategy because of {component} damage.",
-                radio=True, play_beep=True,
-            )
+            line = f"We're adjusting your strategy because of {component} damage."
         else:
-            self.tts_engine.speak(
-                "We're changing your strategy because of the damage.",
-                radio=True, play_beep=True,
-            )
+            line = "We're changing your strategy because of the damage."
+        self.tts_engine.speak(line, radio=True, play_beep=True)
 
     def handle_out_lap(self, **_):
-        self.tts_engine.speak(
-            "Out lap. Build the temperature and check the balance.",
-            radio=True, play_beep=True,
-        )
+        line = "Out lap, Build the temperature and check the balance,"
+        self.tts_engine.speak(line, radio=True, play_beep=True)
 
     def handle_in_lap(self, **_):
-        self.tts_engine.speak(
-            "In lap. Box this lap. Mind the delta on entry.",
-            radio=True, play_beep=True,
-        )
+        line = "In lap, Box this lap, Mind the delta on entry,"
+        self.tts_engine.speak(line, radio=True, play_beep=True)
 
     # ---------------------------------------------------------
     # Teammate / traffic
@@ -180,15 +171,11 @@ class EngineerBrain:
 
     def handle_quali_target(self, target_position: int | None = None, **_):
         if target_position is not None:
-            self.tts_engine.speak(
-                f"We need at least P{target_position} to make the cutoff.",
-                radio=True, play_beep=True,
-            )
+            line = f"We need at least P{target_position} to make the cutoff."
+            self.tts_engine.speak(line, radio=True, play_beep=True)
         else:
-            self.tts_engine.speak(
-                "We need a better lap to make the cutoff.",
-                radio=True, play_beep=True,
-            )
+            line = "We need a better lap to make the cutoff."
+            self.tts_engine.speak(line, radio=True, play_beep=True)
 
     # ---------------------------------------------------------
     # Weather
@@ -198,20 +185,14 @@ class EngineerBrain:
                               trend: str | None = None,
                               **_):
         if minutes is not None and intensity:
-            self.tts_engine.speak(
-                f"{intensity.capitalize()} rain expected in about {minutes} minutes.",
-                radio=True, play_beep=True
-            )
+            line = f"{intensity.capitalize()} rain expected in about {minutes} minutes."
+            self.tts_engine.speak(line, radio=True, play_beep=True)
         elif minutes is not None:
-            self.tts_engine.speak(
-                f"Weather change expected in about {minutes} minutes.",
-                radio=True, play_beep=True
-            )
+            line = f"Weather change expected in about {minutes} minutes."
+            self.tts_engine.speak(line, radio=True, play_beep=True)
         else:
-            self.tts_engine.speak(
-                "Track conditions are changing. Keep me updated on the grip.",
-                radio=True, play_beep=True
-            )
+            line = "Track conditions are changing, Keep me updated on the grip."
+            self.tts_engine.speak(line, radio=True, play_beep=True)
 
     def handle_weather_changed(self, **_):
         self._say("weather_changed")
@@ -243,25 +224,25 @@ class EngineerBrain:
     def handle_gap_report(self, lap: int | None = None,
                           ahead_name: str | None = None,
                           ahead_gap: float | None = None,
-                          ahead_lap_diff: int = 0,
+                          ahead_lapped: bool = False,
                           behind_name: str | None = None,
                           behind_gap: float | None = None,
-                          behind_lap_diff: int = 0,
+                          behind_lapped: bool = False,
                           position: int | None = None,
                           **_):
-        from core.radio_lines import RadioLines
-
         gap_parts = []
-        if lap is not None:
-            gap_parts.append(f"P{position}" if position is not None else f"Lap {lap}")
+        if position is not None:
+            gap_parts.append(f"P{position}")
 
-        if ahead_name:
-            ahead_text = RadioLines.format_gap_text(ahead_gap or 0, ahead_lap_diff)
-            gap_parts.append(f"{ahead_name} ahead, {ahead_text}")
+        if ahead_gap is not None:
+            ahead_text = RadioLines.format_gap_text(ahead_gap, ahead_lapped)
+            if ahead_text:
+                gap_parts.append(f"{ahead_text} ahead")
 
-        if behind_name:
-            behind_text = RadioLines.format_gap_text(behind_gap or 0, behind_lap_diff)
-            gap_parts.append(f"{behind_name} behind, {behind_text}")
+        if behind_gap is not None:
+            behind_text = RadioLines.format_gap_text(behind_gap, behind_lapped)
+            if behind_text:
+                gap_parts.append(f"{behind_text} behind")
 
         if not gap_parts:
             return
@@ -281,16 +262,12 @@ class EngineerBrain:
                               win_on_the_line: bool = False,
                               **_):
         if win_on_the_line:
-            self.tts_engine.speak(
-                "Five laps to go. This is for the win.",
-                radio=True, play_beep=True
-            )
+            line = "Five laps to go, This is for the win."
+            self.tts_engine.speak(line, radio=True, play_beep=True)
             return
         if podium_on_the_line:
-            self.tts_engine.speak(
-                "Five laps to go. This is for the podium.",
-                radio=True, play_beep=True
-            )
+            line = "Five laps to go, This is for the podium."
+            self.tts_engine.speak(line, radio=True, play_beep=True)
             return
 
         self._say("last_five_laps",
@@ -311,28 +288,20 @@ class EngineerBrain:
                         attacking: bool = False,
                         **_):
         if win_on_the_line:
-            self.tts_engine.speak(
-                "Last lap. This is for the win. Bring it home.",
-                radio=True, play_beep=True
-            )
+            line = "Last lap, This is for the win, Bring it home."
+            self.tts_engine.speak(line, radio=True, play_beep=True)
             return
         if podium_on_the_line:
-            self.tts_engine.speak(
-                "Last lap. This is for the podium. Keep it clean.",
-                radio=True, play_beep=True
-            )
+            line = "Last lap, This is for the podium, Keep it clean."
+            self.tts_engine.speak(line, radio=True, play_beep=True)
             return
         if under_threat and behind_gap and behind_name:
-            self.tts_engine.speak(
-                f"Last lap. {RadioLines.format_gap(behind_gap)} to {behind_name} behind. Defend the position.",
-                radio=True, play_beep=True
-            )
+            line = f"Last lap, {RadioLines.format_gap(behind_gap)} to {behind_name} behind, Defend the position."
+            self.tts_engine.speak(line, radio=True, play_beep=True)
             return
         if attacking and ahead_gap and ahead_name:
-            self.tts_engine.speak(
-                f"Last lap. {RadioLines.format_gap(ahead_gap)} to {ahead_name} ahead. Push to the line.",
-                radio=True, play_beep=True
-            )
+            line = f"Last lap, {RadioLines.format_gap(ahead_gap)} to {ahead_name} ahead, Push to the line."
+            self.tts_engine.speak(line, radio=True, play_beep=True)
             return
 
         self._say("last_lap",
@@ -386,6 +355,9 @@ class EngineerBrain:
 
     def handle_session_type_changed(self, **_):
         self._say("session_type_changed")
+
+    def handle_participants_ready(self, **_):
+        self._say("drivers_ready")
 
     # ---------------------------------------------------------
     # Garage events

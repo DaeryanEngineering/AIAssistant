@@ -28,6 +28,7 @@ class EventType(Enum):
     LAP_START = auto()
     RACE_GAP = auto()
     RACE_FINISH = auto()
+    PARTICIPANTS_READY = auto()
     RACE_WIN = auto()
     CONSTRUCTORS_CHAMPIONSHIP_WON = auto()
     DRIVERS_CHAMPIONSHIP_WON = auto()

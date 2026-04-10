@@ -35,6 +35,8 @@ class CareerTracker:
         self.consecutive_titles: int = 0
         self.total_titles: int = 0
         self.first_f1_title_year: Optional[int] = None
+        self.teammate_name: Optional[str] = None
+        self.maxed_rnd_categories: list = []
 
         self._load()
 
@@ -51,12 +53,22 @@ class CareerTracker:
             with open(CAREER_FILE, "r") as f:
                 data = json.load(f)
 
-            self.career_year = data.get("career_year", 1)
+            stored_year = data.get("career_year", 1)
+            self.career_year = stored_year
             self.series = data.get("series", "F2")
             self.warmth = data.get("warmth", 0)
             self.consecutive_titles = data.get("consecutive_titles", 0)
             self.total_titles = data.get("total_titles", 0)
             self.first_f1_title_year = data.get("first_f1_title_year", None)
+            
+            # R&D tracking fields
+            self.teammate_name = data.get("teammate_name", None)
+            self.maxed_rnd_categories = data.get("maxed_rnd_categories", [])
+            
+            # Reset teammate_name if career year changed (player changed teams/seasons)
+            stored_year_in_file = data.get("_last_year_for_teammate", stored_year)
+            if stored_year_in_file != stored_year:
+                self.teammate_name = None
 
             # Auto-calculate warmth from career year if not manually set
             if "warmth" not in data:
@@ -73,6 +85,9 @@ class CareerTracker:
             "consecutive_titles": self.consecutive_titles,
             "total_titles": self.total_titles,
             "first_f1_title_year": self.first_f1_title_year,
+            "teammate_name": self.teammate_name,
+            "maxed_rnd_categories": self.maxed_rnd_categories,
+            "_last_year_for_teammate": self.career_year,
         }
         os.makedirs(os.path.dirname(CAREER_FILE), exist_ok=True)
         with open(CAREER_FILE, "w") as f:
@@ -84,7 +99,10 @@ class CareerTracker:
 
     def set_career_year(self, year: int):
         """Manually set career year (called via text command or config)."""
-        self.career_year = max(1, min(11, year))
+        year = max(1, min(11, year))
+        if year != self.career_year:
+            self.teammate_name = None
+        self.career_year = year
         self.warmth = YEAR_TO_WARMTH.get(self.career_year, 0)
         self._save()
 
@@ -141,11 +159,13 @@ class CareerTracker:
     def name_frequency(self) -> float:
         """Probability of including driver name in a line."""
         w = self.warmth
-        if w <= 3:
+        if w <= 2:       # sharp
+            return 0.50
+        elif w <= 5:     # professional
             return 0.40
-        elif w <= 7:
+        elif w <= 8:     # supportive
             return 0.25
-        else:
+        else:             # partnership (9-10)
             return 0.15
 
     @property

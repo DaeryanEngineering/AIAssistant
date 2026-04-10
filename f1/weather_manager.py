@@ -19,6 +19,9 @@ class WeatherManager:
 
         # Cached state
         self.last_weather = None
+        self.stable_weather = None
+        self.pending_weather = None
+        self._pending_count = 0
         self.last_forecast = None
         self.last_rain_prediction = None
         self.last_track_wetness = None
@@ -53,15 +56,33 @@ class WeatherManager:
 
         if self.last_weather is None:
             self.last_weather = current_weather
+            self.stable_weather = current_weather
 
-        if current_weather != self.last_weather:
-            self._emit(EventType.WEATHER_CHANGED,
-                       old=self.last_weather,
-                       new=current_weather)
+        # Require 3 consecutive readings before announcing weather change
+        if current_weather != self.stable_weather:
+            if self.pending_weather == current_weather:
+                self._pending_count += 1
+            else:
+                self.pending_weather = current_weather
+                self._pending_count = 1
+
+            if self._pending_count >= 3:
+                self._emit(EventType.WEATHER_CHANGED,
+                           old=self.stable_weather,
+                           new=current_weather)
+                self.stable_weather = current_weather
+                self.pending_weather = None
+                self._pending_count = 0
+        else:
+            # Weather returned to stable, reset pending
+            self.pending_weather = None
+            self._pending_count = 0
 
         # -----------------------------------------------------
         # FORECAST CHANGES
         # -----------------------------------------------------
+        if not session.m_weatherForecastSamples:
+            return
         forecast = list(session.m_weatherForecastSamples)
 
         if self.last_forecast is None:
@@ -82,8 +103,8 @@ class WeatherManager:
                            old_weather=old_seg.m_weather,
                            new_weather=new_seg.m_weather)
 
-            # Rain percentage change
-            if new_seg.m_rainPercentage != old_seg.m_rainPercentage:
+            # Rain percentage change - only trigger if significant (>=10% change)
+            if abs(new_seg.m_rainPercentage - old_seg.m_rainPercentage) >= 10:
                 self._emit(EventType.FORECAST_RAIN_CHANGE,
                            segment=i,
                            old_pct=old_seg.m_rainPercentage,
@@ -98,6 +119,8 @@ class WeatherManager:
         # -----------------------------------------------------
         # RAIN PREDICTION
         # -----------------------------------------------------
+        if not session.m_weatherForecastSamples:
+            return
         rain_minutes = session.m_weatherForecastSamples[0].m_rainPercentage
         if rain_minutes > 50 and self.last_rain_prediction != rain_minutes:
             self.last_rain_prediction = rain_minutes
@@ -108,12 +131,13 @@ class WeatherManager:
         # TRACK DRYING / WORSENING
         # -----------------------------------------------------
         if self.last_track_wetness is not None:
-            if track_wetness < self.last_track_wetness and not self.last_track_drying:
+            # Only trigger if change is significant (>=5)
+            if self.last_track_wetness - track_wetness >= 5 and not self.last_track_drying:
                 self._emit(EventType.TRACK_DRYING)
                 self.last_track_drying = True
                 self.last_track_worsening = False
 
-            elif track_wetness > self.last_track_wetness and not self.last_track_worsening:
+            elif track_wetness - self.last_track_wetness >= 5 and not self.last_track_worsening:
                 self._emit(EventType.TRACK_WORSENING)
                 self.last_track_worsening = True
                 self.last_track_drying = False

@@ -49,6 +49,13 @@ class TeammateManager:
         if self.teammate_index is None:
             return
 
+        if not lap_data_all:
+            return
+
+        # Bounds check
+        if self.teammate_index >= len(lap_data_all) or self.teammate_index >= len(status_all):
+            return
+
         teammate_lap = lap_data_all[self.teammate_index]
         teammate_status = status_all[self.teammate_index]
 
@@ -58,20 +65,17 @@ class TeammateManager:
         pit_mode = getattr(teammate_status, "m_pitMode", 0)
 
         if pit_mode == 1 and self.last_teammate_pit_mode != 1:
-            first_name = self.telemetry_state.get_driver_first_name(
-                self.telemetry_state.get_driver_id_for_participant_index(self.teammate_index) or 0
-            )
+            first_name = self.telemetry_state.get_driver_first_name_by_participant_index(self.teammate_index)
             self._emit(EventType.TEAMMATE_PITTING, first_name=first_name)
 
         # -----------------------------------------------------
         # TEAMMATE DNF
         # -----------------------------------------------------
-        dnf = bool(teammate_status.m_resultStatus in (4, 5, 6))
+        result_status = getattr(teammate_status, 'm_resultStatus', 0)
+        dnf = bool(result_status in (4, 5, 6))
 
         if dnf and not self.last_teammate_dnf:
-            first_name = self.telemetry_state.get_driver_first_name(
-                self.telemetry_state.get_driver_id_for_participant_index(self.teammate_index) or 0
-            )
+            first_name = self.telemetry_state.get_driver_first_name_by_participant_index(self.teammate_index)
             self._emit(EventType.TEAMMATE_DNF, first_name=first_name)
 
         # -----------------------------------------------------
@@ -89,19 +93,19 @@ class TeammateManager:
         if not self.telemetry_state.participants:
             return
 
-        player_team = None
-        for p in self.telemetry_state.participants.m_participants:
-            if p.m_raceNumber == player_index + 1:
-                player_team = p.m_teamId
-                break
-
-        if player_team is None:
+        participants = self.telemetry_state.participants.m_participants
+        if player_index >= len(participants):
             return
 
-        for idx, p in enumerate(self.telemetry_state.participants.m_participants):
+        # Get player's team directly from their index
+        player = participants[player_index]
+        player_team = player.m_teamId
+
+        # Find teammate (same team, different index)
+        for idx, p in enumerate(participants):
             if idx == player_index:
                 continue
             if p.m_teamId == player_team:
                 self.teammate_index = idx
-                self.teammate_name = self.telemetry_state.get_driver_name(p.m_driverId)
+                self.teammate_name = p.m_name.rstrip('\x00') if isinstance(p.m_name, str) else p.m_name.decode('utf-8', errors='replace').rstrip('\x00') if p.m_name else f"Driver_{idx}"
                 return

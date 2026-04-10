@@ -20,6 +20,7 @@ from udp.packet_definitions import (
     PacketMotionExData,
     PacketTimeTrialData,
     PacketLapPositionsData,
+    SafetyCarStatus,
 )
 
 
@@ -51,6 +52,9 @@ class TelemetryState:
     def __init__(self):
         self._lock = threading.RLock()
         self._listeners: List[EventListener] = []
+
+        # Flags
+        self._participants_ready = False
 
         # Cached packets
         self.motion: Optional[PacketMotionData] = None
@@ -120,7 +124,11 @@ class TelemetryState:
                 self.car_status = packet
 
             elif isinstance(packet, PacketParticipantsData):
-                self.participants = packet
+                if not self._participants_ready:
+                    self.participants = packet
+                    self._build_driver_map(packet)
+                    self._participants_ready = True
+                    self._emit(EventType.PARTICIPANTS_READY)
 
             elif isinstance(packet, PacketEventData):
                 self.event = packet
@@ -171,8 +179,11 @@ class TelemetryState:
             current_lap = None
 
         if current_lap is not None and current_lap != self._last_lap:
-            self._last_lap = current_lap
-            self._emit(EventType.LAP_START, lap=current_lap)
+            if self.session and self.session.m_sessionType not in (11, 15):
+                self._last_lap = current_lap
+                self._emit(EventType.LAP_START, lap=current_lap)
+            else:
+                self._last_lap = current_lap
 
 
     # ------------------------------------------------------------
@@ -184,6 +195,19 @@ class TelemetryState:
         if not self.session:
             return None
         return self.session.m_sessionTimeLeft
+
+    @property
+    def session_type(self) -> Optional[int]:
+        if not self.session:
+            return None
+        return self.session.m_sessionType
+
+    @property
+    def is_formation_lap(self) -> bool:
+        if not self.session:
+            return False
+        return (self.session.m_safetyCarStatus == SafetyCarStatus.FORMATION or 
+                self.session.m_formationLap == 1)
 
     @property
     def driver_status(self) -> Optional[int]:
@@ -279,6 +303,18 @@ class TelemetryState:
     # Driver name lookup
     # ------------------------------------------------------------
 
+    @staticmethod
+    def _safe_name_decode(name_field) -> str:
+        """Safely decode name field that might be str or bytes."""
+        if isinstance(name_field, str):
+            name = name_field.rstrip('\x00')
+        elif isinstance(name_field, bytes):
+            name = name_field.decode('utf-8', errors='replace').rstrip('\x00')
+        else:
+            return ""
+        # Convert to title case (e.g., "HAMILTON" -> "Hamilton")
+        return name.title()
+
     def get_driver_name(self, driver_id: int) -> str:
         """Look up driver name by driver ID from participants data."""
         if not self.participants:
@@ -286,7 +322,7 @@ class TelemetryState:
         try:
             for p in self.participants.m_participants:
                 if p.m_driverId == driver_id:
-                    name = p.m_name.decode('utf-8', errors='replace').rstrip('\x00')
+                    name = self._safe_name_decode(p.m_name)
                     if name:
                         return name
             return f"Driver_{driver_id}"
@@ -329,6 +365,13 @@ class TelemetryState:
         return 0
 
     @property
+    def ideal_pit_lap(self) -> int:
+        """Lap number for ideal pit window."""
+        if not self.session:
+            return 0
+        return self.session.m_pitStopWindowIdealLap
+
+    @property
     def pit_release_allowed(self) -> bool:
         """Whether pit release is allowed (not in F1 25 UDP spec)."""
         return False
@@ -340,8 +383,35 @@ class TelemetryState:
 
     @property
     def track_wetness(self) -> int:
-        """Track wetness percentage (not in F1 25 UDP spec). Returns 0 (dry)."""
-        return 0
+        """
+        Infer track wetness from FIA flags and weather.
+        F1 25 doesn't broadcast track wetness directly.
+        m_vehicleFiaFlags: -1=unknown, 0=none, 1=green, 2=blue(yellow/wet), 3=yellow
+        """
+        wetness = 0
+
+        # Infer from weather (session packet)
+        if self.session:
+            weather = getattr(self.session, 'm_weather', 0)
+            if weather == 3:  # light rain
+                wetness = 50
+            elif weather == 4:  # heavy rain
+                wetness = 80
+            elif weather == 5:  # storm
+                wetness = 100
+
+        # Override with FIA flags if available
+        if self.car_status:
+            try:
+                flags = self.car_status.get_player_status().m_vehicleFiaFlags
+                if flags == 2:  # blue flag = wet track
+                    wetness = max(wetness, 85)
+                elif flags == 3:  # yellow flag
+                    wetness = max(wetness, 50)
+            except Exception:
+                pass
+
+        return wetness
 
     @property
     def car_damage_wear(self) -> tuple:
@@ -365,7 +435,7 @@ class TelemetryState:
         try:
             for p in self.participants.m_participants:
                 if p.m_driverId == driver_id:
-                    name = p.m_name.decode('utf-8', errors='replace').rstrip('\x00')
+                    name = self._safe_name_decode(p.m_name)
                     if name:
                         return name
             return f"Driver_{driver_id}"
@@ -382,6 +452,34 @@ class TelemetryState:
         full = self.get_driver_full_name(driver_id)
         parts = full.split()
         return parts[-1] if parts else f"Driver_{driver_id}"
+
+    def get_driver_name_by_participant_index(self, participant_index: int) -> str:
+        """Get driver last name directly from participant index."""
+        if not self.participants:
+            return f"Driver_{participant_index}"
+        try:
+            p = self.participants.m_participants[participant_index]
+            name = self._safe_name_decode(p.m_name)
+            if name:
+                parts = name.split()
+                return parts[-1] if parts else f"Driver_{participant_index}"
+            return f"Driver_{participant_index}"
+        except (IndexError, AttributeError):
+            return f"Driver_{participant_index}"
+
+    def get_driver_first_name_by_participant_index(self, participant_index: int) -> str:
+        """Get driver first name directly from participant index."""
+        if not self.participants:
+            return f"Driver_{participant_index}"
+        try:
+            p = self.participants.m_participants[participant_index]
+            name = self._safe_name_decode(p.m_name)
+            if name:
+                parts = name.split()
+                return parts[0] if parts else f"Driver_{participant_index}"
+            return f"Driver_{participant_index}"
+        except (IndexError, AttributeError):
+            return f"Driver_{participant_index}"
 
     # ------------------------------------------------------------
     # Team name lookup
@@ -456,3 +554,196 @@ class TelemetryState:
             return p.m_driverId
         except (IndexError, AttributeError):
             return None
+
+    # =========================================================
+    # GAP WORKER HELPERS
+    # =========================================================
+
+    def get_player(self):
+        """Get player lap data for gap calculations."""
+        if not self.lap_data:
+            return None
+        try:
+            return self.lap_data.get_player_lap_data()
+        except Exception:
+            return None
+
+    def get_car_ahead(self):
+        """Get lap data for car ahead of player."""
+        player = self.get_player()
+        if not player:
+            return None
+        position = player.m_carPosition
+        if position <= 1:
+            return None
+        return self.get_lap_data_for_position(position - 1)
+
+    def get_car_behind(self):
+        """Get lap data for car behind player."""
+        player = self.get_player()
+        if not player:
+            return None
+        return self.get_lap_data_for_position(player.m_carPosition + 1)
+
+    @property
+    def track_length(self) -> float:
+        """Get track length in meters."""
+        if not self.session:
+            return 0
+        return getattr(self.session, 'm_trackLength', 0)
+
+    # =========================================================
+    # DRIVER ID BASED LOOKUPS (for GapWorker)
+    # =========================================================
+
+    def _build_driver_map(self, participants):
+        """Build driver ID to name map and position to driver ID map from participants packet."""
+        self._driver_id_to_name = {}
+        self._position_to_driver_id = {}
+        if not participants:
+            return
+        try:
+            for p in participants.m_participants:
+                if p and p.m_driverId < 255:
+                    name = self._safe_name_decode(p.m_name)
+                    if name:
+                        self._driver_id_to_name[p.m_driverId] = name
+                    
+                    if p.m_racePosition > 0:
+                        self._position_to_driver_id[p.m_racePosition] = p.m_driverId
+        except Exception:
+            pass
+
+    def get_driver_name(self, driver_id: int) -> str:
+        """Get driver full name by driver ID."""
+        if hasattr(self, '_driver_id_to_name') and driver_id in self._driver_id_to_name:
+            return self._driver_id_to_name[driver_id]
+        return f"Driver_{driver_id}"
+
+    # =========================================================
+    # INDEX-BASED LOOKUPS (for GapWorker)
+    # =========================================================
+
+    def get_player_index(self):
+        """Get player's participant index."""
+        if not self.session:
+            return None
+        return getattr(self.session.header, 'm_playerCarIndex', None)
+
+    def get_car_ahead_index(self):
+        """Get participant index of car ahead of player."""
+        idx = self.get_player_index()
+        if idx is None or idx <= 0:
+            return None
+        return idx - 1
+
+    def get_car_behind_index(self):
+        """Get participant index of car behind player."""
+        idx = self.get_player_index()
+        if idx is None:
+            return None
+        return idx + 1
+
+    def get_driver_id_by_index(self, index: int) -> int | None:
+        """Get driver ID by participant index."""
+        if not self.participants or index is None:
+            return None
+        try:
+            return self.participants.m_participants[index].m_driverId
+        except:
+            return None
+
+    def get_last_name_by_driver_id(self, driver_id: int) -> str:
+        """Get driver last name by driver ID."""
+        if not self.participants:
+            return "Driver"
+        try:
+            for p in self.participants.m_participants:
+                if p.m_driverId == driver_id:
+                    name = self._safe_name_decode(p.m_name)
+                    if name:
+                        return name.split()[-1]
+        except:
+            pass
+        return "Driver"
+
+    def get_lap_data_by_driver_id(self, driver_id: int):
+        """Get lap data for a specific driver ID."""
+        if not self.lap_data:
+            print(f"[DEBUG] No lap_data available")
+            return None
+        try:
+            for lap in self.lap_data.m_lapData:
+                if lap.m_driverId == driver_id:
+                    return lap
+        except Exception as e:
+            print(f"[DEBUG] get_lap_data_by_driver_id error: {e}")
+        return None
+        return getattr(self.session, 'm_playerCarIndex', None)
+
+    def get_car_ahead_index(self):
+        """Get participant index of car ahead of player."""
+        idx = self.get_player_index()
+        if idx is None or idx <= 0:
+            return None
+        return idx - 1
+
+    def get_car_behind_index(self):
+        """Get participant index of car behind player."""
+        idx = self.get_player_index()
+        if idx is None:
+            return None
+        return idx + 1
+
+    def get_driver_id_by_index(self, index: int) -> int | None:
+        """Get driver ID by participant index."""
+        if not self.participants or index is None:
+            return None
+        try:
+            return self.participants.m_participants[index].m_driverId
+        except:
+            return None
+
+    def get_last_name_by_driver_id(self, driver_id: int) -> str:
+        """Get driver last name by driver ID."""
+        if not self.participants:
+            return "Driver"
+        try:
+            for p in self.participants.m_participants:
+                if p.m_driverId == driver_id:
+                    name = self._safe_name_decode(p.m_name)
+                    if name:
+                        return name.split()[-1]
+        except:
+            pass
+        return "Driver"
+
+    def get_car_in_front(self) -> int | None:
+        """Get driver ID of car ahead of player."""
+        player = self.get_player()
+        if not player:
+            return None
+        position = player.m_carPosition
+        if position <= 1:
+            return None
+        return self.get_driver_id_by_position(position - 1)
+
+    def get_car_behind_id(self) -> int | None:
+        """Get driver ID of car behind player."""
+        player = self.get_player()
+        if not player:
+            return None
+        behind_position = player.m_carPosition + 1
+        return self.get_driver_id_by_position(behind_position)
+
+    def get_lap_data_by_driver_id(self, driver_id: int):
+        """Get lap data for a specific driver ID."""
+        if not self.lap_data:
+            return None
+        try:
+            for lap in self.lap_data.m_lapData:
+                if lap.m_driverId == driver_id:
+                    return lap
+        except Exception:
+            pass
+        return None

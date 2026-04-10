@@ -1,15 +1,22 @@
 # core/tts_cache.py
-# Synthesizes radio lines using XTTS v2 with persistent on-disk cache.
+# Synthesizes radio lines using LuxTTS with persistent on-disk cache.
 # On first run: synthesizes all lines and saves to disk.
 # On subsequent runs: loads from disk (instant startup).
 
 import os
+import sys
 import re
 import hashlib
 import threading
 import numpy as np
-from TTS.api import TTS
+import soundfile as sf
 from core.assets import AssetMap
+
+
+# Add LuxTTS to path
+_LUXTTS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "LuxTTS")
+if os.path.exists(_LUXTTS_PATH):
+    sys.path.insert(0, _LUXTTS_PATH)
 
 
 def _numbers_to_words(text: str) -> str:
@@ -69,76 +76,125 @@ def _cache_key(text: str) -> str:
 
 class TTSCache:
     """
-    XTTS v2 TTS with persistent on-disk cache.
+    LuxTTS voice cloning with persistent on-disk cache.
     All static radio lines are pre-cached. Dynamic lines synthesized on first use and cached.
     Subsequent app launches: zero synthesis, all audio loaded instantly from disk.
     """
 
     CACHE_DIR = "assets/voices/cache"
+    SAMPLE_RATE = 24000  # Output sample rate
 
     def __init__(self, av_manager):
         self._av = av_manager
-        self._model = TTS("tts_models/multilingual/multi-dataset/xtts_v2")
+        self._lux_tts = None
+        self._speaker_embedding = None
         self._speaker_wav = AssetMap.get_voice("default")
-        self._gpt_latent = None
-        self._spk_embedding = None
         self._latents_ready = threading.Event()
+        self._animation_enabled = True  # Enable by default
 
         os.makedirs(self.CACHE_DIR, exist_ok=True)
-        threading.Thread(target=self._prime_latents, daemon=True).start()
+        
+        # Eager loading - pre-load model at startup for instant first response
+        self._prime_latents()
+
+    def set_animation_enabled(self, enabled: bool):
+        """Enable/disable animation. When disabled, saves CPU/GPU in Engineer mode."""
+        self._animation_enabled = enabled
+        if not enabled:
+            self._av.stop_animation()
+
+    def _ensure_model_loaded(self):
+        """Lazy load - load model on first TTS request."""
+        if self._latents_ready.is_set():
+            return
+        self._prime_latents()
 
     def _prime_latents(self):
+        """Load LuxTTS model and encode speaker embedding."""
         try:
-            xtts = self._model.synthesizer.tts_model
-            gpt, spk = xtts.get_conditioning_latents(audio_path=self._speaker_wav)
-            self._gpt_latent = gpt
-            self._spk_embedding = spk
+            from zipvoice.luxvoice import LuxTTS
+            
+            self._lux_tts = LuxTTS('YatharthS/LuxTTS', device='cuda')
+            
+            self._speaker_embedding = self._lux_tts.encode_prompt(self._speaker_wav, rms=0.01)
+            
             self._latents_ready.set()
-            print("[TTS] Speaker latents ready")
         except Exception as e:
-            print(f"[TTS] Failed to prime latents: {e}")
+            try:
+                from zipvoice.luxvoice import LuxTTS
+                self._lux_tts = LuxTTS('YatharthS/LuxTTS', device='cpu', threads=4)
+                self._speaker_embedding = self._lux_tts.encode_prompt(self._speaker_wav, rms=0.01)
+                self._latents_ready.set()
+            except Exception as e2:
+                pass
 
     def preload(self, all_texts: list[str]):
         if not all_texts:
             return
-        if not self._latents_ready.wait(timeout=60):
-            print("[TTS] Latents not ready, skipping preload")
+        if not self._latents_ready.wait(timeout=120):
             return
 
-        missing = [t for t in all_texts if not os.path.exists(self._cached_path(t))]
+        processed_texts = [_numbers_to_words(t) for t in all_texts]
+        missing = [t for t in processed_texts if not os.path.exists(self._cached_path(t))]
         if missing:
-            print(f"[TTS] Caching {len(missing)} static lines in background...")
             threading.Thread(target=self._background_build, args=(missing,), daemon=True).start()
-        else:
-            print(f"[TTS] All {len(all_texts)} static lines loaded from disk (instant)")
 
     def _background_build(self, texts: list[str]):
+        self._ensure_model_loaded()
+        
         for i, text in enumerate(texts):
-            self._synthesize_and_save(text)
-            if (i + 1) % 50 == 0:
-                print(f"[TTS] Cache build: {i+1}/{len(texts)}")
-        print(f"[TTS] Cache build complete: {len(texts)} lines")
-
+            if self._synthesize_and_save(text, num_steps=4):
+                pass
+        
     def _cached_path(self, text: str) -> str:
-        key = _cache_key(_numbers_to_words(text))
+        # text should already be processed by _numbers_to_words()
+        key = _cache_key(text)
         return os.path.join(self.CACHE_DIR, f"{key}.npy")
 
-    def _synthesize_and_save(self, text: str) -> bool:
+    def _synthesize_and_save(self, text: str, num_steps: int = 4) -> bool:
+        """Synthesize and save to cache.
+        
+        Args:
+            text: Text to synthesize
+            num_steps: 4 = balanced speed/quality
+        """
         processed = _numbers_to_words(text)
-        key = _cache_key(processed)
-        path = os.path.join(self.CACHE_DIR, f"{key}.npy")
-        if os.path.exists(path):
-            return True
+        
+        if not self._latents_ready.wait(timeout=60):
+            return False
+        
         try:
-            result = self._model.synthesizer.tts_model.inference(
-                processed, "en", self._gpt_latent, self._spk_embedding,
-            )
-            audio = np.array(result["wav"], dtype=np.float32)
-            np.save(path, audio)
+            wav = self._lux_tts.generate_speech(processed, self._speaker_embedding, num_steps=num_steps)
+            wav = wav.numpy().squeeze()
+            
+            wav_24k = wav[::2]
+            
+            path = self._cached_path(processed)
+            np.save(path, wav_24k)
+            
             return True
         except Exception as e:
             print(f"[TTS] Synthesis error for '{text}': {e}")
             return False
+
+    def _synthesize_and_play_background(self, text: str, animation: str | None):
+        """Synthesize in background, cache it, then play."""
+        self._ensure_model_loaded()  # Lazy load on first use
+        
+        processed = _numbers_to_words(text)
+        if not self._latents_ready.wait(timeout=60):
+            return
+        try:
+            wav = self._lux_tts.generate_speech(processed, self._speaker_embedding, num_steps=4)
+            wav = wav.numpy().squeeze()
+            wav_24k = wav[::2]
+            
+            path = self._cached_path(processed)
+            np.save(path, wav_24k)
+            
+            self._av.play_tts_audio(wav_24k, self.SAMPLE_RATE, animation=animation)
+        except Exception as e:
+            pass
 
     def speak(
         self,
@@ -156,16 +212,23 @@ class TTSCache:
             self._av.clear_queue()
         if play_beep:
             self._av.play_audio("radio_beep")
+        
+        # Skip animation if disabled (Engineer mode)
+        effective_animation = animation if self._animation_enabled else None
+        
         path = self._cached_path(processed)
         if os.path.exists(path):
+            # Cache hit - play instantly from disk
             audio = np.load(path)
-            self._av.play_tts_audio(audio, 24000, animation=animation)
+            self._av.play_tts_audio(audio, self.SAMPLE_RATE, animation=effective_animation)
         else:
-            self._synthesize_and_save(processed)
-            path = self._cached_path(processed)
-            if os.path.exists(path):
-                audio = np.load(path)
-                self._av.play_tts_audio(audio, 24000, animation=animation)
+            # Cache miss - synthesize in background thread
+            # Don't block the main thread
+            threading.Thread(
+                target=self._synthesize_and_play_background,
+                args=(processed, effective_animation),
+                daemon=True
+            ).start()
 
     def shutdown(self):
         pass

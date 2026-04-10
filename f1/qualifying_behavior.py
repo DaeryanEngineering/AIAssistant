@@ -45,6 +45,10 @@ class QualifyingBehavior:
         ui_state: contains in_garage flag
         """
 
+        # Skip qualifying behavior for race sessions (including WGP)
+        if session.m_sessionType in (11, 15):
+            return
+
         # -----------------------------------------------------
         # QUALIFYING SESSION GOAL (once per session)
         # -----------------------------------------------------
@@ -56,6 +60,8 @@ class QualifyingBehavior:
         # -----------------------------------------------------
         # LAP START
         # -----------------------------------------------------
+        if lap_data is None:
+            return
         lap_number = lap_data.m_currentLapNum
 
         if lap_number != self.last_lap_number:
@@ -65,6 +71,7 @@ class QualifyingBehavior:
         # LAP END (valid or invalid)
         # -----------------------------------------------------
         lap_valid = not bool(lap_data.m_currentLapInvalid)
+        position = lap_data.m_carPosition
 
         # Lap just finished
         if lap_number != self.last_lap_number and self.last_lap_number != -1:
@@ -80,7 +87,6 @@ class QualifyingBehavior:
         # -----------------------------------------------------
         # POSITION UPDATE (only after valid laps)
         # -----------------------------------------------------
-        position = lap_data.m_carPosition
 
         if lap_valid:
             if self.last_position is None or position != self.last_position:

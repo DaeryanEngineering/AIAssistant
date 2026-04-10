@@ -45,6 +45,8 @@ class OnTrackManager:
         # -----------------------------------------------------
         # ON TRACK / OFF TRACK
         # -----------------------------------------------------
+        if lap_data is None:
+            return
         on_track = lap_data.m_carPosition > 0  # placeholder logic
 
         if on_track and not self.last_on_track:
@@ -52,6 +54,12 @@ class OnTrackManager:
 
         if not on_track and self.last_on_track:
             self._emit(EventType.ON_TRACK_EXITED)
+
+        if status is None:
+            return
+
+        if session is None:
+            return
 
         # -----------------------------------------------------
         # PIT LIMITER (VOICE ONLY)

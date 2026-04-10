@@ -77,11 +77,11 @@ class ModeManager:
         # 0 = None (on track)
         # 1 = Pitting
         # 2 = In pit lane
-        if ps == 0:
+        if ps is not None and ps == 0:
             return True
 
         # Movement fallback
-        if speed > 1:
+        if speed is not None and speed > 1:
             return True
 
         return False
@@ -97,7 +97,7 @@ class ModeManager:
         if ds == 0:
             return True
 
-        if ps == 2 and speed == 0:
+        if ps == 2 and speed is not None and speed == 0:
             return True
 
         return False
@@ -114,14 +114,14 @@ class ModeManager:
             self._set_mode(SaulMode.AI)
             return
 
-        # 2. Detect pause
-        if self._is_game_paused():
-            self._set_mode(SaulMode.PAUSED)
-            return
-
-        # 3. On track → Engineer Mode
+        # 2. On track → Engineer Mode
         if self._is_on_track():
             self._set_mode(SaulMode.ENGINEER)
+            return
+
+        # 3. Detect pause
+        if self._is_game_paused():
+            self._set_mode(SaulMode.PAUSED)
             return
 
         # 4. In garage → F1 Mode
