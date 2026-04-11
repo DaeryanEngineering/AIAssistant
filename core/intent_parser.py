@@ -28,7 +28,7 @@ class IntentParser:
             if champ:
                 return champ
 
-            # Race commands (formation, launch, sprint, pit)
+            # Race commands (launch, sprint, pit)
             race = self._parse_race_commands(text_lower)
             if race:
                 return race

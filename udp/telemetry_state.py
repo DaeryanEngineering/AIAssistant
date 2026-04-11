@@ -129,7 +129,6 @@ class TelemetryState:
                     self.participants = packet
                     self._build_driver_map(packet)
                     self._participants_ready = True
-                    self._emit(EventType.PARTICIPANTS_READY)
 
             elif isinstance(packet, PacketEventData):
                 self.event = packet
@@ -214,13 +213,6 @@ class TelemetryState:
             s.m_gameMode != 0 and
             any(x != 0 for x in s.m_weekendStructure)
         )
-
-    @property
-    def is_formation_lap(self) -> bool:
-        if not self.session:
-            return False
-        return (self.session.m_safetyCarStatus == SafetyCarStatus.FORMATION or 
-                self.session.m_formationLap == 1)
 
     @property
     def is_f2_feature(self) -> bool:

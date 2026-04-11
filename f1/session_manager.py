@@ -24,7 +24,6 @@ class SessionManager:
         self.countdown_announced = False
         self._last_driver_status = None
         self._in_garage = False
-        self._session_ready_announced = False
         self._sprint_announced = False
 
     # ---------------------------------------------------------
@@ -52,14 +51,6 @@ class SessionManager:
             15: "WORLD_GRAND_PRIX"
         }
         type_name = type_names.get(session_type, f"UNKNOWN({session_type})")
-
-        # -----------------------------------------------------
-        # SESSION READY
-        # -----------------------------------------------------
-        if self.telemetry_state.is_session_ready and not getattr(self, '_session_ready_announced', False):
-            print("[SESSION] SESSION_READY")
-            self._emit(EventType.SESSION_READY)
-            self._session_ready_announced = True
 
         # -----------------------------------------------------
         # SPRINT RACE ANNOUNCEMENT (no mandatory pit stop)

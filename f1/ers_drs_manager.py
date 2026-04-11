@@ -521,13 +521,12 @@ class ERSDRSManager:
         return on_straight
 
     def _is_under_safety_car(self, session) -> bool:
-        """Check if under SC, VSC, or formation lap."""
+        """Check if under SC or VSC."""
         if not session:
             return False
         return session.m_safetyCarStatus in (
             SafetyCarStatus.FULL,
             SafetyCarStatus.VIRTUAL,
-            SafetyCarStatus.FORMATION,
         )
 
     def _is_quali(self, session) -> bool:

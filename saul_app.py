@@ -251,8 +251,27 @@ class GapWorker:
 
         print(f"[GAP] Checking: lap={current_lap}, ahead_id={ahead_id}, behind_id={behind_id}")
 
-        gap_ahead = self._compute_gap_to_driver(ahead_id)
-        gap_behind = self._compute_gap_to_driver(behind_id)
+        # Compute gaps directly using totalDistance from lap data objects
+        track_length = self.telemetry.track_length or 0
+        speed = self.telemetry.speed or 0
+
+        gap_ahead = None
+        if player and ahead_lap:
+            gap_ahead = self._compute_gap(
+                player.m_totalDistance,
+                ahead_lap.m_totalDistance,
+                track_length,
+                speed
+            )
+
+        gap_behind = None
+        if player and behind_lap:
+            gap_behind = self._compute_gap(
+                player.m_totalDistance,
+                behind_lap.m_totalDistance,
+                track_length,
+                speed
+            )
 
         print(f"[GAP] Gaps: ahead={gap_ahead}, behind={gap_behind}")
 
@@ -268,27 +287,7 @@ class GapWorker:
             with self._lock:
                 self._pending_gap = gap_line
 
-    def _compute_gap_to_driver(self, driver_id):
-        if driver_id is None:
-            return None
-
-        player = self.telemetry.get_player()
-        other = self.telemetry.get_lap_data_by_driver_id(driver_id)
-
-        if not other:
-            return None
-
-        track_length = self.telemetry.track_length
-        speed = self.telemetry.speed or 0
-
-        return self._compute_gap(
-            player.m_totalDistance,
-            other.m_totalDistance,
-            track_length,
-            speed
-        )
-
-    def _compute_gap(self, player_dist, other_dist, track_length, speed):
+    def _compute_gap(self, player_dist, other_dist, track_length, speed=0):
         if track_length <= 0 or speed <= 0:
             return None
 

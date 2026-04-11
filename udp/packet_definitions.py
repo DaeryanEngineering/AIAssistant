@@ -692,10 +692,6 @@ class PacketSessionData:
     def is_vsc_active(self) -> bool:
         return self.m_safetyCarStatus == SafetyCarStatus.VIRTUAL
 
-    @property
-    def is_formation_lap(self) -> bool:
-        return self.m_safetyCarStatus == SafetyCarStatus.FORMATION
-
 
 # ------------------------------------------------------------
 # Packet 2: Lap Data

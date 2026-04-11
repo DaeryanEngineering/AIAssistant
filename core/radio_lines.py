@@ -3244,9 +3244,11 @@ class RadioLines:
     @staticmethod
     def get_all_static() -> list[str]:
         """
-        Return all unique static radio lines for pre-synthesis, Strips {name} and {driver} placeholders (name injection happens at audio level), Excludes lines with other dynamic kwargs (description, position, etc.), """
+        Return all unique radio lines for pre-synthesis. Strips {name} and {driver} placeholders. 
+        Also processes {positions} and {position} through number-to-words conversion.
+        """
         lines = set()
-        safe_placeholders = {"{name}", "{driver}"}
+        safe_placeholders = {"{name}", "{driver}", "{positions}", "{position}"}
 
         for pool_name, pool_data in RadioLines._race_events.items():
             for tier_lines in pool_data.values():
@@ -3254,7 +3256,7 @@ class RadioLines:
                     found = set(re.findall(r'\{[^}]+\}', line))
                     dynamic = found - safe_placeholders
                     if dynamic:
-                        continue  # skip lines with dynamic placeholders
+                        continue  # skip lines with other dynamic placeholders
 
                     # Strip safe placeholders
                     result = line
@@ -3263,6 +3265,51 @@ class RadioLines:
                     result = result.strip()
                     if result:
                         lines.add(result)
+
+        return sorted(lines)
+
+    @staticmethod
+    def get_all_static_with_positions() -> list[str]:
+        """
+        Return all unique radio lines including position gain/lost permutations.
+        Generates all combinations of {positions} and {position} values.
+        """
+        from core.tts_cache import _numbers_to_words
+        
+        lines = set()
+        safe_placeholders = {"{name}", "{driver}", "{positions}", "{position}"}
+
+        for pool_name, pool_data in RadioLines._race_events.items():
+            for tier_lines in pool_data.values():
+                for line in tier_lines:
+                    found = set(re.findall(r'\{[^}]+\}', line))
+                    dynamic = found - safe_placeholders
+                    if dynamic:
+                        continue  # skip lines with other dynamic placeholders
+
+                    # Check if this line has position placeholders
+                    has_positions = "{positions}" in line or "{position}" in line
+                    
+                    if has_positions:
+                        # Generate all permutations for positions (1-20) and position (1-20)
+                        for pos_delta in range(1, 21):  # gained/lost positions
+                            for pos in range(1, 21):  # new position
+                                result = line
+                                if "{positions}" in result:
+                                    result = result.replace("{positions}", str(pos_delta))
+                                if "{position}" in result:
+                                    result = result.replace("{position}", str(pos))
+                                result = result.strip()
+                                if result:
+                                    lines.add(result)
+                    else:
+                        # Strip safe placeholders for non-position lines
+                        result = line
+                        for ph in found:
+                            result = result.replace(ph, "")
+                        result = result.strip()
+                        if result:
+                            lines.add(result)
 
         return sorted(lines)
 

@@ -4,7 +4,7 @@ import sys
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.tts_cache import TTSCache
+from core.tts_cache import TTSCache, _numbers_to_words
 from core.assets import AssetMap
 
 class MockAV:
@@ -28,9 +28,9 @@ def main():
     
     print("Speaker latents ready!")
     
-    # Load all radio lines
+    # Load all radio lines including position gain/lost permutations
     from core.radio_lines import RadioLines
-    all_lines = list(RadioLines.get_all_static())
+    all_lines = list(RadioLines.get_all_static_with_positions())
     all_lines.extend(RadioLines.get_all_f1_mode())
     
     print(f"Found {len(all_lines)} static lines")
@@ -38,8 +38,15 @@ def main():
     # Add the startup line
     all_lines.append("I'm ready, Shawn")
     
-    # Filter to missing
-    missing = [t for t in all_lines if not os.path.exists(tts._cached_path(t))]
+    # Process lines through _numbers_to_words to match cache key format
+    processed_lines = [_numbers_to_words(line) for line in all_lines]
+    
+    # Filter to missing (check processed path)
+    missing = []
+    for proc in processed_lines:
+        if not os.path.exists(tts._cached_path(proc)):
+            missing.append(proc)
+    
     print(f"Need to cache {len(missing)} lines")
     
     if not missing:

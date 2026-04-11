@@ -63,14 +63,8 @@ class EngineerBrain:
         self._say("delta_freeze_end")
 
     # ---------------------------------------------------------
-    # Formation lap / start
+    # Race start
     # ---------------------------------------------------------
-    def handle_formation_lap(self, **_):
-        self._say("formation_lap", priority=True)
-
-    def handle_find_grid_slot(self, **_):
-        self._say("find_grid_slot")
-
     def handle_race_start(self, **_):
         self._say("race_start", priority=True)
 
@@ -367,9 +361,6 @@ class EngineerBrain:
 
     def handle_session_type_changed(self, **_):
         self._say("session_type_changed")
-
-    def handle_participants_ready(self, **_):
-        self._say("drivers_ready")
 
     # ---------------------------------------------------------
     # Garage events
